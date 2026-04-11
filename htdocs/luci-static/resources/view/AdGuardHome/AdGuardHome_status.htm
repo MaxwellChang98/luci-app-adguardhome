@@ -1,0 +1,408 @@
+<script type="text/javascript">//<![CDATA[
+(function () {
+	function markPage() {
+		var map = document.querySelector(".cbi-map");
+		if (map) {
+			map.classList.add("adguardhome-luci-page");
+		}
+	}
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", markPage);
+	} else {
+		markPage();
+	}
+})();
+
+XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', null,
+	function (x, data) {
+		var tb = document.getElementById("AdGuardHome_status");
+		var rb = document.getElementById("AdGuardHome_running_badge");
+		var pb = document.getElementById("AdGuardHome_redirect_badge");
+		if (data && tb) {
+			if (data.running) {
+				tb.innerHTML = '<span class="status-running"><i class="icon-circle-fill"></i> <%:RUNNING%></span>';
+				if (rb) {
+					rb.className = "badge badge-success";
+					rb.textContent = "<%:Running%>";
+				}
+			} else {
+				tb.innerHTML = '<span class="status-stopped"><i class="icon-circle"></i> <%:STOPPED%></span>';
+				if (rb) {
+					rb.className = "badge badge-danger";
+					rb.textContent = "<%:Stopped%>";
+				}
+			}
+			if (data.redirect) {
+				if (pb) {
+					pb.className = "badge badge-success";
+					pb.textContent = "<%:Redirected%>";
+				}
+			} else {
+				if (pb) {
+					pb.className = "badge badge-secondary";
+					pb.textContent = "<%:Not Redirect%>";
+				}
+			}
+		}
+	}
+);
+//]]>
+</script>
+
+<style>
+/* Apple-style tokens */
+:root {
+	--ag-card-bg: #ffffff;
+	--ag-card-border: rgba(0, 0, 0, 0.06);
+	--ag-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+	--ag-card-radius: 12px;
+	--ag-header-bg-blue: linear-gradient(135deg, #007AFF 0%, #5E5CE6 100%);
+	--ag-header-bg-green: linear-gradient(135deg, #34C759 0%, #30D158 100%);
+	--ag-text-primary: #1d1d1f;
+	--ag-text-secondary: #86868b;
+	--ag-spacing: 16px;
+	--ag-spacing-lg: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--ag-card-bg: #1c1c1e;
+		--ag-card-border: rgba(255, 255, 255, 0.08);
+		--ag-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+		--ag-text-primary: #f5f5f7;
+		--ag-text-secondary: #a1a1a6;
+	}
+}
+
+/* Page shell: title + description */
+.adguardhome-luci-page {
+	max-width: 920px;
+	margin: 0 auto;
+}
+
+.adguardhome-luci-page > h2 {
+	font-size: 1.5rem;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	color: var(--ag-text-primary);
+	margin: 0 0 6px 0;
+	padding: 0;
+	border: none;
+}
+
+.adguardhome-luci-page .cbi-map-descr {
+	font-size: 0.875rem;
+	color: var(--ag-text-secondary);
+	line-height: 1.45;
+	margin: 0 0 var(--ag-spacing) 0;
+	padding: 0 0 var(--ag-spacing) 0;
+	border-bottom: 1px solid var(--ag-card-border);
+}
+
+/* Status strip: first cbi-section (after h2 + descr) */
+.adguardhome-luci-page > fieldset.cbi-section:first-of-type,
+.adguardhome-luci-page > div.cbi-section:first-of-type {
+	background: transparent !important;
+	box-shadow: none !important;
+	border: none !important;
+	margin-bottom: var(--ag-spacing) !important;
+	padding: 0 !important;
+}
+
+/* Main form card: second cbi-section */
+.adguardhome-luci-page > fieldset.cbi-section:nth-of-type(2),
+.adguardhome-luci-page > div.cbi-section:nth-of-type(2) {
+	background: var(--ag-card-bg);
+	border-radius: var(--ag-card-radius);
+	box-shadow: var(--ag-card-shadow);
+	border: 1px solid var(--ag-card-border);
+	margin-bottom: var(--ag-spacing);
+	overflow: hidden;
+}
+
+.adguardhome-luci-page > fieldset.cbi-section:nth-of-type(2) .cbi-section-node,
+.adguardhome-luci-page > div.cbi-section:nth-of-type(2) .cbi-section-node {
+	padding: 4px 0;
+}
+
+/* Status bar layout */
+.ag-status-bar {
+	display: flex;
+	align-items: stretch;
+	gap: var(--ag-spacing);
+	flex-wrap: wrap;
+}
+
+.ag-status-item {
+	flex: 1 1 200px;
+	display: flex;
+	align-items: center;
+	min-height: 48px;
+	padding: 12px 16px;
+	background: rgba(0, 122, 255, 0.06);
+	border-radius: 10px;
+	border: 1px solid var(--ag-card-border);
+}
+
+.ag-status-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 10px;
+	border-radius: 6px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.badge-success {
+	background: rgba(52, 199, 89, 0.15);
+	color: #34c759;
+}
+
+.badge-danger {
+	background: rgba(255, 59, 48, 0.15);
+	color: #ff3b30;
+}
+
+.badge-secondary {
+	background: rgba(142, 142, 147, 0.15);
+	color: #8e8e93;
+}
+
+/* Rows: label left, field right */
+.adguardhome-luci-page .cbi-value {
+	padding: 14px var(--ag-spacing-lg);
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	display: flex;
+	align-items: flex-start;
+	gap: 16px;
+}
+
+.adguardhome-luci-page .cbi-value:last-child {
+	border-bottom: none;
+}
+
+.adguardhome-luci-page .cbi-value-title {
+	flex: 0 0 min(38%, 220px);
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--ag-text-primary);
+	padding-top: 8px;
+}
+
+.adguardhome-luci-page .cbi-value-field {
+	flex: 1;
+	min-width: 0;
+}
+
+.adguardhome-luci-page .cbi-value-description {
+	margin-top: 8px;
+	font-size: 12px;
+	color: var(--ag-text-secondary);
+	line-height: 1.45;
+}
+
+/* Open Web UI button (in description) */
+.adguardhome-luci-page .ag-web-open-wrap {
+	display: block;
+	margin-top: 10px;
+}
+
+.adguardhome-luci-page .ag-web-open-btn {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 10px 18px;
+	border: none;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	color: #fff;
+	background: var(--ag-header-bg-blue);
+	box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28);
+	transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.adguardhome-luci-page .ag-web-open-btn:hover {
+	opacity: 0.95;
+	box-shadow: 0 6px 18px rgba(0, 122, 255, 0.35);
+}
+
+.adguardhome-luci-page .ag-web-open-btn:active {
+	transform: scale(0.98);
+}
+
+/* Inputs */
+.adguardhome-luci-page .cbi-input-text,
+.adguardhome-luci-page .cbi-input-number,
+.adguardhome-luci-page .cbi-input-password {
+	width: 100%;
+	max-width: 420px;
+	padding: 10px 14px;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	border-radius: 8px;
+	font-size: 14px;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.adguardhome-luci-page .cbi-input-text:focus,
+.adguardhome-luci-page .cbi-input-number:focus,
+.adguardhome-luci-page .cbi-input-password:focus {
+	outline: none;
+	border-color: #007aff;
+	box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+
+.adguardhome-luci-page .cbi-select {
+	width: 100%;
+	max-width: 420px;
+	padding: 10px 14px;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	border-radius: 8px;
+	font-size: 14px;
+	background: var(--ag-card-bg);
+}
+
+.adguardhome-luci-page .cbi-input-textarea {
+	width: 100%;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	border-radius: 8px;
+	font-size: 13px;
+	font-family: "SF Mono", Monaco, "Courier New", monospace;
+}
+
+.adguardhome-luci-page .cbi-input-checkbox,
+.adguardhome-luci-page .cbi-input-radio {
+	width: 18px;
+	height: 18px;
+	accent-color: #007aff;
+}
+
+/* Buttons */
+.adguardhome-luci-page .cbi-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 10px 18px;
+	border: none;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: opacity 0.2s ease;
+}
+
+.adguardhome-luci-page .cbi-button-apply {
+	background: var(--ag-header-bg-green);
+	color: #fff;
+}
+
+.adguardhome-luci-page .cbi-button-apply:hover {
+	opacity: 0.92;
+}
+
+.adguardhome-luci-page .cbi-button-reset {
+	background: rgba(0, 0, 0, 0.05);
+	color: var(--ag-text-primary);
+}
+
+.adguardhome-luci-page .cbi-button-action {
+	background: var(--ag-header-bg-blue);
+	color: #fff;
+}
+
+/* Footer */
+.adguardhome-luci-page .cbi-section-actions {
+	padding: var(--ag-spacing);
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	border-top: 1px solid var(--ag-card-border);
+	background: rgba(0, 0, 0, 0.02);
+}
+
+/* MultiValue */
+.adguardhome-luci-page .cbi-multivalue {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.adguardhome-luci-page .cbi-checkbox,
+.adguardhome-luci-page .cbi-radio {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	background: rgba(0, 0, 0, 0.03);
+	border-radius: 6px;
+	font-size: 13px;
+}
+
+.status-running {
+	color: #34c759;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.status-stopped {
+	color: #ff3b30;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.icon-circle-fill::before {
+	content: "●";
+	font-size: 10px;
+}
+
+.icon-circle::before {
+	content: "○";
+	font-size: 12px;
+}
+
+@media (max-width: 768px) {
+	.adguardhome-luci-page .cbi-value {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.adguardhome-luci-page .cbi-value-title {
+		flex: none;
+		padding-top: 0;
+	}
+
+	.adguardhome-luci-page .cbi-input-text,
+	.adguardhome-luci-page .cbi-input-number,
+	.adguardhome-luci-page .cbi-select {
+		max-width: 100%;
+	}
+}
+</style>
+
+<div class="ag-status-bar">
+	<div class="ag-status-item" id="AdGuardHome_status_wrap">
+		<p id="AdGuardHome_status" style="margin:0;">
+			<em><%:Collecting data...%></em>
+		</p>
+	</div>
+	<div class="ag-status-item ag-status-badges">
+		<span id="AdGuardHome_running_badge" class="badge badge-secondary"><%:Service%></span>
+		<span id="AdGuardHome_redirect_badge" class="badge badge-secondary"><%:DNS Redirect%></span>
+	</div>
+</div>

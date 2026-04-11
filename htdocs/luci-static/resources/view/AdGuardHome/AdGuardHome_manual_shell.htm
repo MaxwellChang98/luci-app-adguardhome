@@ -1,0 +1,36 @@
+<%# Early styles + class hook for manual CBI page: fixes SVG being stretched to full width by some LuCI themes %>
+<script type="text/javascript">//<![CDATA[
+(function () {
+	function markPage() {
+		var map = document.querySelector(".cbi-map");
+		if (map) {
+			map.classList.add("adguardhome-luci-page");
+		}
+	}
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", markPage);
+	} else {
+		markPage();
+	}
+})();
+//]]></script>
+<style>
+/* Manual page: theme rules like svg { max-width:100% } must not blow up toolbar icons */
+.adguardhome-luci-page .yaml-editor-container svg {
+	width: 18px !important;
+	height: 18px !important;
+	max-width: 18px !important;
+	max-height: 18px !important;
+	min-width: 0 !important;
+	display: inline-block !important;
+	vertical-align: middle !important;
+	flex-shrink: 0 !important;
+	box-sizing: border-box !important;
+}
+.adguardhome-luci-page .yaml-editor-container svg.yaml-ico-sm {
+	width: 16px !important;
+	height: 16px !important;
+	max-width: 16px !important;
+	max-height: 16px !important;
+}
+</style>

@@ -1,8 +1,24 @@
 #!/bin/sh
 
-AdGuardHome_enable=$(uci get AdGuardHome.AdGuardHome.enabled)
-redirect=$(uci get AdGuardHome.AdGuardHome.redirect)
+detect_firewall_version() {
+	if [ -n "$FIREWALL_VERSION" ]; then
+		return
+	fi
 
-if [ $AdGuardHome_enable -eq 1 -a "$redirect" == "redirect" ]; then
+	if command -v fw4 >/dev/null 2>&1 && [ -f /etc/fw4 ]; then
+		FIREWALL_VERSION="fw4"
+	elif command -v fw3 >/dev/null 2>&1; then
+		FIREWALL_VERSION="fw3"
+	else
+		FIREWALL_VERSION="fw4"
+	fi
+}
+
+AdGuardHome_enable=$(uci get AdGuardHome.AdGuardHome.enabled 2>/dev/null)
+redirect=$(uci get AdGuardHome.AdGuardHome.redirect 2>/dev/null)
+
+if [ "$AdGuardHome_enable" = "1" ] && [ "$redirect" == "redirect" ]; then
+	detect_firewall_version
+	logger -t AdGuardHome "firewall.start: Detected $FIREWALL_VERSION, setting up DNS redirect"
 	/etc/init.d/AdGuardHome do_redirect 1
 fi

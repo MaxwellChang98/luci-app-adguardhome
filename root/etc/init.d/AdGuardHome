@@ -13,6 +13,328 @@ EXTRA_HELP="        do_redirect 0 or 1\
 		test_crontab
 		force_reload
 		isrunning"
+
+# ============================================================
+# 防火墙版本检测函数 (兼容 FW3 和 FW4)
+# ============================================================
+detect_firewall_version() {
+	if [ -n "$FIREWALL_VERSION" ]; then
+		return
+	fi
+
+	# 优先检测 fw4（纯 nftables）
+	if command -v fw4 >/dev/null 2>&1 && [ -f /etc/fw4 ]; then
+		FIREWALL_VERSION="fw4"
+		logger -t AdGuardHome "Detected firewall: FW4 (nftables)"
+	elif command -v nft >/dev/null 2>&1; then
+		# 有 nft 但没有 fw4，使用 fw4 兼容方式
+		if nft list table inet fw4 >/dev/null 2>&1; then
+			FIREWALL_VERSION="fw4"
+			logger -t AdGuardHome "Detected firewall: FW4 (nftables)"
+		else
+			FIREWALL_VERSION="fw3"
+			logger -t AdGuardHome "Detected firewall: FW3 (nftables)"
+		fi
+	elif command -v fw3 >/dev/null 2>&1; then
+		FIREWALL_VERSION="fw3"
+		logger -t AdGuardHome "Detected firewall: FW3 (iptables)"
+	else
+		FIREWALL_VERSION="unknown"
+		logger -t AdGuardHome "Warning: Unknown firewall version, defaulting to FW4"
+		FIREWALL_VERSION="fw4"
+	fi
+}
+
+# ============================================================
+# FW3/nftables 混合 DNS 重定向设置 - 保留客户端来源 IP
+# 如果 fw3 表不存在，使用 fw4 兼容方式
+# ============================================================
+set_iptables_fw3() {
+	local ipv6_server="$1"
+	local tcp_server="$2"
+
+	# 添加 UCI 防火墙规则
+	uci -q batch <<-EOF >/dev/null 2>&1
+		delete firewall.AdGuardHome
+		set firewall.AdGuardHome=include
+		set firewall.AdGuardHome.type=script
+		set firewall.AdGuardHome.path=/usr/share/AdGuardHome/firewall.start
+		set firewall.AdGuardHome.reload=1
+		commit firewall
+	EOF
+
+	# 清除旧规则
+	clear_iptables_fw3
+
+	logger -t AdGuardHome "DNS redirect: Setting up DNS redirect on port $AdGuardHome_PORT"
+
+	# 获取所有 LAN IPv4 地址（使用 ifconfig）
+	local IPS
+	IPS=$(ifconfig 2>/dev/null | grep "inet addr" | grep -v ":127" | grep "Bcast" | awk '{print $2}' | awk -F: '{print $2}')
+
+	if [ -n "$IPS" ]; then
+		for IP in $IPS; do
+			logger -t AdGuardHome "DNS redirect: Adding DNAT for IPv4 $IP:$AdGuardHome_PORT"
+
+			if command -v nft >/dev/null 2>&1; then
+				# 检查 fw3 表是否存在
+				if nft list table ip fw3 >/dev/null 2>&1; then
+					nft add rule ip fw3 nat_prerouting ip daddr $IP udp dport 53 dnat to ${IP}:$AdGuardHome_PORT comment "AdGuardHome"
+					if [ "$tcp_server" == "1" ]; then
+						nft add rule ip fw3 nat_prerouting ip daddr $IP tcp dport 53 dnat to ${IP}:$AdGuardHome_PORT comment "AdGuardHome"
+					fi
+				elif nft list table inet fw4 >/dev/null 2>&1; then
+					nft add rule inet fw4 dstnat ip daddr $IP udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+					if [ "$tcp_server" == "1" ]; then
+						nft add rule inet fw4 dstnat ip daddr $IP tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+					fi
+				else
+					# 创建独立表
+					nft add table ip adguardhome 2>/dev/null
+					nft add chain ip adguardhome prerouting { type nat hook prerouting priority -100 \; } 2>/dev/null
+					nft add rule ip adguardhome prerouting ip daddr $IP udp dport 53 dnat to ${IP}:$AdGuardHome_PORT comment "AdGuardHome"
+					if [ "$tcp_server" == "1" ]; then
+						nft add rule ip adguardhome prerouting ip daddr $IP tcp dport 53 dnat to ${IP}:$AdGuardHome_PORT comment "AdGuardHome"
+					fi
+				fi
+			else
+				# 使用 iptables
+				iptables -t nat -I PREROUTING -d $IP -p udp --dport 53 -j DNAT --to-destination ${IP}:$AdGuardHome_PORT
+				if [ "$tcp_server" == "1" ]; then
+					iptables -t nat -I PREROUTING -d $IP -p tcp --dport 53 -j DNAT --to-destination ${IP}:$AdGuardHome_PORT
+				fi
+			fi
+		done
+	else
+		logger -t AdGuardHome "DNS redirect: Cannot get LAN IPs, using REDIRECT"
+		# 回退到 REDIRECT（会丢失来源 IP）
+		if command -v nft >/dev/null 2>&1; then
+			if nft list table ip fw3 >/dev/null 2>&1; then
+				nft add rule ip fw3 nat_prerouting udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				if [ "$tcp_server" == "1" ]; then
+					nft add rule ip fw3 nat_prerouting tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				fi
+			elif nft list table inet fw4 >/dev/null 2>&1; then
+				nft add rule inet fw4 dstnat udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				if [ "$tcp_server" == "1" ]; then
+					nft add rule inet fw4 dstnat tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				fi
+			else
+				nft add rule ip nat prerouting udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				if [ "$tcp_server" == "1" ]; then
+					nft add rule ip nat prerouting tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				fi
+			fi
+		else
+			iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $AdGuardHome_PORT
+			if [ "$tcp_server" == "1" ]; then
+				iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports $AdGuardHome_PORT
+			fi
+		fi
+	fi
+
+	# IPv6
+	if [ "$ipv6_server" == "1" ]; then
+		local IPS6
+		IPS6=$(ifconfig 2>/dev/null | grep "inet6 addr" | grep -v "fe80" | grep -v "::1" | awk '{print $3}')
+
+		if [ -n "$IPS6" ]; then
+			for IP6 in $IPS6; do
+				logger -t AdGuardHome "DNS redirect: Adding DNAT for IPv6 $IP6:$AdGuardHome_PORT"
+				if command -v nft >/dev/null 2>&1; then
+					if nft list table ip6 fw3 >/dev/null 2>&1; then
+						nft add rule ip6 fw3 nat_prerouting ip6 daddr $IP6 udp dport 53 dnat to ${IP6}:$AdGuardHome_PORT comment "AdGuardHome"
+						if [ "$tcp_server" == "1" ]; then
+							nft add rule ip6 fw3 nat_prerouting ip6 daddr $IP6 tcp dport 53 dnat to ${IP6}:$AdGuardHome_PORT comment "AdGuardHome"
+						fi
+					elif nft list table inet fw4 >/dev/null 2>&1; then
+						nft add rule inet fw4 dstnat ip6 daddr $IP6 udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+						if [ "$tcp_server" == "1" ]; then
+							nft add rule inet fw4 dstnat ip6 daddr $IP6 tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+						fi
+					else
+						nft add table ip6 adguardhome 2>/dev/null
+						nft add chain ip6 adguardhome prerouting { type nat hook prerouting priority -100 \; } 2>/dev/null
+						nft add rule ip6 adguardhome prerouting ip6 daddr $IP6 udp dport 53 dnat to ${IP6}:$AdGuardHome_PORT comment "AdGuardHome"
+						if [ "$tcp_server" == "1" ]; then
+							nft add rule ip6 adguardhome prerouting ip6 daddr $IP6 tcp dport 53 dnat to ${IP6}:$AdGuardHome_PORT comment "AdGuardHome"
+						fi
+					fi
+				fi
+			done
+		fi
+	fi
+}
+
+# ============================================================
+# FW4 (nftables) DNS 重定向设置 - 保留客户端来源 IP
+# 直接在 fw4 的 dstnat 链中添加 DNAT 规则替代 REDIRECT
+# ============================================================
+set_iptables_fw4() {
+	local ipv6_server="$1"
+	local tcp_server="$2"
+
+	uci -q batch <<-EOF >/dev/null 2>&1
+		delete firewall.AdGuardHome
+		set firewall.AdGuardHome=include
+		set firewall.AdGuardHome.type=script
+		set firewall.AdGuardHome.path=/usr/share/AdGuardHome/firewall.start
+		set firewall.AdGuardHome.reload=1
+		commit firewall
+	EOF
+
+	# 清除旧规则
+	clear_iptables_fw4
+
+	logger -t AdGuardHome "FW4 DNAT: Setting up DNS redirect on port $AdGuardHome_PORT"
+
+	# 获取所有 LAN IPv4 地址（使用 ifconfig，类似用户提供的版本）
+	local IPS
+	IPS=$(ifconfig 2>/dev/null | grep "inet addr" | grep -v ":127" | grep "Bcast" | awk '{print $2}' | awk -F: '{print $2}')
+
+	if [ -n "$IPS" ]; then
+		for IP in $IPS; do
+			logger -t AdGuardHome "FW4: Adding DNAT rule for IPv4 $IP:$AdGuardHome_PORT"
+			nft add rule inet fw4 dstnat ip daddr $IP udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome" 2>/dev/null
+			if [ "$tcp_server" == "1" ]; then
+				nft add rule inet fw4 dstnat ip daddr $IP tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome" 2>/dev/null
+			fi
+		done
+	else
+		# 回退：使用默认 LAN 接口
+		local lan_iface=$(uci get network.lan.device 2>/dev/null || uci get network.lan.ifname 2>/dev/null || echo "br-lan")
+		local lan_ip=$(ip -4 addr show dev "$lan_iface" 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | grep -v "^127\." | head -1)
+		if [ -n "$lan_ip" ]; then
+			logger -t AdGuardHome "FW4: Fallback to $lan_iface IP $lan_ip"
+			nft add rule inet fw4 dstnat iifname "$lan_iface" udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+			if [ "$tcp_server" == "1" ]; then
+				nft add rule inet fw4 dstnat iifname "$lan_iface" tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+			fi
+		else
+			logger -t AdGuardHome "FW4: Cannot get LAN IP, using global REDIRECT"
+			nft add rule inet fw4 dstnat udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+			if [ "$tcp_server" == "1" ]; then
+				nft add rule inet fw4 dstnat tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+			fi
+		fi
+	fi
+
+	# IPv6
+	if [ "$ipv6_server" == "1" ]; then
+		local IPS6
+		IPS6=$(ifconfig 2>/dev/null | grep "inet6 addr" | grep -v "fe80" | grep -v "::1" | awk '{print $3}')
+		if [ -n "$IPS6" ]; then
+			for IP6 in $IPS6; do
+				logger -t AdGuardHome "FW4: Adding DNAT rule for IPv6 $IP6:$AdGuardHome_PORT"
+				nft add rule inet fw4 dstnat ip6 daddr $IP6 udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome" 2>/dev/null
+				if [ "$tcp_server" == "1" ]; then
+					nft add rule inet fw4 dstnat ip6 daddr $IP6 tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome" 2>/dev/null
+				fi
+			done
+		else
+			local lan_iface=$(uci get network.lan.device 2>/dev/null || uci get network.lan.ifname 2>/dev/null || echo "br-lan")
+			local lan_ip6=$(ip -6 addr show dev "$lan_iface" 2>/dev/null | grep inet6 | grep -v "^fe80" | awk '{print $2}' | cut -d'/' -f1 | head -1)
+			if [ -n "$lan_ip6" ]; then
+				logger -t AdGuardHome "FW4: Adding IPv6 DNAT for $lan_ip6"
+				nft add rule inet fw4 dstnat iifname "$lan_iface" ip6 dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				if [ "$tcp_server" == "1" ]; then
+					nft add rule inet fw4 dstnat iifname "$lan_iface" ip6 protocol tcp th dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+				fi
+			fi
+		fi
+	fi
+}
+
+# ============================================================
+# FW3 清除规则（兼容 fw3 和 fw4）
+# ============================================================
+clear_iptables_fw3() {
+	uci -q batch <<-EOF >/dev/null 2>&1
+		delete firewall.AdGuardHome
+		commit firewall
+	EOF
+
+	if command -v nft >/dev/null 2>&1; then
+		# 清除独立 adguardhome 表
+		nft delete table ip adguardhome 2>/dev/null
+		nft delete table ip6 adguardhome 2>/dev/null
+
+		# 清除 fw3 中的残留规则
+		if nft list table ip fw3 >/dev/null 2>&1; then
+			for handle in $(nft -a list chain ip fw3 nat_prerouting 2>/dev/null | grep "AdGuardHome" | awk -F '# handle ' '{print $2}'); do
+				nft delete rule ip fw3 nat_prerouting handle $handle 2>/dev/null
+			done
+			for handle in $(nft -a list chain ip6 fw3 nat_prerouting 2>/dev/null | grep "AdGuardHome" | awk -F '# handle ' '{print $2}'); do
+				nft delete rule ip6 fw3 nat_prerouting handle $handle 2>/dev/null
+			done
+		fi
+
+		# 清除 fw4 中的残留规则
+		if nft list table inet fw4 >/dev/null 2>&1; then
+			for handle in $(nft -a list chain inet fw4 dstnat 2>/dev/null | grep "AdGuardHome" | awk -F '# handle ' '{print $2}'); do
+				nft delete rule inet fw4 dstnat handle $handle 2>/dev/null
+			done
+		fi
+	else
+		# iptables 方式
+		local lan_iface=$(uci get network.lan.device 2>/dev/null || uci get network.lan.ifname 2>/dev/null || echo "br-lan")
+		while iptables -t nat -C PREROUTING -i "$lan_iface" -p udp --dport 53 -j DNAT 2>/dev/null; do
+			iptables -t nat -D PREROUTING -i "$lan_iface" -p udp --dport 53 -j DNAT 2>/dev/null
+		done
+		while iptables -t nat -C PREROUTING -i "$lan_iface" -p tcp --dport 53 -j DNAT 2>/dev/null; do
+			iptables -t nat -D PREROUTING -i "$lan_iface" -p tcp --dport 53 -j DNAT 2>/dev/null
+		done
+		while iptables -t nat -C PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $AdGuardHome_PORT 2>/dev/null; do
+			iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports $AdGuardHome_PORT 2>/dev/null
+		done
+		while iptables -t nat -C PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports $AdGuardHome_PORT 2>/dev/null; do
+			iptables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports $AdGuardHome_PORT 2>/dev/null
+		done
+	fi
+}
+
+# ============================================================
+# FW4 清除规则
+# ============================================================
+clear_iptables_fw4() {
+	uci -q batch <<-EOF >/dev/null 2>&1
+		delete firewall.AdGuardHome
+		commit firewall
+	EOF
+
+	# 清除 fw4 中带 "AdGuardHome" 注释的残留规则
+	for handle in $(nft -a list chain inet fw4 dstnat 2>/dev/null | grep "AdGuardHome" | awk -F '# handle ' '{print $2}'); do
+		nft delete rule inet fw4 dstnat handle ${handle} 2>/dev/null
+	done
+}
+
+# ============================================================
+# 统一的 set_iptable 函数 (自动选择防火墙版本)
+# ============================================================
+set_iptable() {
+	detect_firewall_version
+
+	local ipv6_server="$1"
+	local tcp_server="$2"
+
+	if [ "$FIREWALL_VERSION" == "fw3" ]; then
+		set_iptables_fw3 "$ipv6_server" "$tcp_server"
+	else
+		set_iptables_fw4 "$ipv6_server" "$tcp_server"
+	fi
+}
+
+# ============================================================
+# 统一的 clear_iptable 函数 (自动选择防火墙版本)
+# ============================================================
+clear_iptable() {
+	if [ "$FIREWALL_VERSION" == "fw3" ]; then
+		clear_iptables_fw3
+	else
+		clear_iptables_fw4
+	fi
+}
+
 set_forward_dnsmasq()
 {
 	local PORT="$1"
@@ -56,65 +378,17 @@ stop_forward_dnsmasq()
 	/etc/init.d/dnsmasq restart
 }
 
-set_iptable() 
-{
-    local ipv6_server=$1
-    local tcp_server=$2
-    uci -q batch <<-EOF >/dev/null 2>&1
-        delete firewall.AdGuardHome
-        set firewall.AdGuardHome=include
-        set firewall.AdGuardHome.type=script
-        set firewall.AdGuardHome.path=/usr/share/AdGuardHome/firewall.start
-        set firewall.AdGuardHome.reload=1
-        commit firewall
-EOF
-
-    IPS="`ifconfig | grep "inet addr" | grep -v ":127" | grep "Bcast" | awk '{print $2}' | awk -F : '{print $2}'`"
-    for IP in $IPS
-    do
-        if [ "$tcp_server" == "1" ]; then
-            nft add rule inet fw4 dstnat ip daddr $IP tcp dport 53 redirect to :$AdGuardHome_PORT comment "nft_dstnat_AdGuardHome" >/dev/null 2>&1
-        fi
-        nft add inet fw4 dstnat ip daddr $IP udp dport 53 redirect to :$AdGuardHome_PORT comment "nft_dstnat_AdGuardHome" >/dev/null 2>&1
-    done
-
-    if [ "$ipv6_server" == 0 ]; then
-        return
-    fi
-
-    IPS="`ifconfig | grep "inet6 addr" | grep -v " fe80::" | grep -v " ::1" | grep "Global" | awk '{print $3}'`"
-    for IP in $IPS
-    do
-        if [ "$tcp_server" == "1" ]; then
-            nft add rule inet fw4 dstnat ip6 daddr $IP tcp dport 53 redirect to :$AdGuardHome_PORT comment "nft_dstnat_AdGuardHome" >/dev/null 2>&1
-        fi
-        nft add rule inet fw4 dstnat ip6 daddr $IP udp dport 53 redirect to :$AdGuardHome_PORT comment "nft_dstnat_AdGuardHome" >/dev/null 2>&1
-    done
-}
-
-clear_iptable()
-{
-    uci -q batch <<-EOF >/dev/null 2>&1
-        delete firewall.AdGuardHome
-        commit firewall
-EOF
-
-    for handle in $(nft -a list chain inet fw4 dstnat 2>/dev/null | grep -E "nft_dstnat_AdGuardHome" | awk -F '# handle ' '{print $2}'); do
-        nft delete rule inet fw4 dstnat handle ${handle} 2>/dev/null
-    done
-}
-
-
 service_triggers() {
 	procd_add_reload_trigger "$CONFIGURATION"
 	[ "$(uci get AdGuardHome.AdGuardHome.redirect)" == "redirect" ] && procd_add_reload_trigger firewall
 }
+
 isrunning(){
-config_load "${CONFIGURATION}"
-_isrunning
-local r=$?
-([ "$r" == "0" ] && echo "running") || ([ "$r" == "1" ] && echo "not run" ) || echo "no bin"
-return $r
+	config_load "${CONFIGURATION}"
+	_isrunning
+	local r=$?
+	([ "$r" == "0" ] && echo "running") || ([ "$r" == "1" ] && echo "not run" ) || echo "no bin"
+	return $r
 }
 _isrunning(){
 	config_get binpath $CONFIGURATION binpath "/usr/bin/AdGuardHome/AdGuardHome"
@@ -222,7 +496,7 @@ _do_redirect()
 
 	if [ "$old_redirect" != "$redirect" ] || [ "$old_port" != "$AdGuardHome_PORT" ] || [ "$old_enabled" = "1" -a "$enabled" = "0" ]; then
 		if [ "$old_redirect" != "none" ]; then
-			if [  "$old_redirect" == "redirect" -a "$old_port" != "0" ]; then
+			if [ "$old_redirect" == "redirect" -a "$old_port" != "0" ]; then
 				clear_iptable "$old_port" "$ipv6_server"
 			elif [ "$old_redirect" == "dnsmasq-upstream" ]; then
 				stop_forward_dnsmasq "$old_port"
@@ -231,7 +505,7 @@ _do_redirect()
 			fi
 		fi
 	elif [ "$old_enabled" = "1" -a "$enabled" = "1" ]; then
-		if [  "$old_redirect" == "redirect" -a "$old_port" != "0" ]; then
+		if [ "$old_redirect" == "redirect" -a "$old_port" != "0" ]; then
 			clear_iptable "$old_port" "$ipv6_server"
 		fi
 	fi
@@ -256,43 +530,42 @@ _do_redirect()
 }
 get_filesystem()
 {
-# print out path filesystem
-    echo $1 | awk '
-    BEGIN{
-    while (("mount"| getline ret) > 0)
-    {
-    split(ret,d);
-    fs[d[3]]=d[5];
-    m=index(d[1],":")
-    if (m==0)
-    {
-        pt[d[3]]=d[1]
-    }else{
-        pt[d[3]]=substr(d[1],m+1)
-    }}}{
-    split($0,d,"/");
-    if ("/" in fs)
-    {
-    result1=fs["/"];
-    }
-    if ("/" in pt)
-    {
-    result2=pt["/"];
-    }
-    for (i=2;i<=length(d);i++)
-    {
-       p[i]=p[i-1]"/"d[i];
-       if (p[i] in fs)
-        {
-        result1=fs[p[i]];
-        result2=pt[p[i]];
-        }
-    }
-    if (result2 in fs){
-        result=fs[result2]}
-    else{
-        result=result1}
-    print(result);}'
+	echo $1 | awk '
+	BEGIN{
+	while (("mount"| getline ret) > 0)
+	{
+	split(ret,d);
+	fs[d[3]]=d[5];
+	m=index(d[1],":")
+	if (m==0)
+	{
+		pt[d[3]]=d[1]
+	}else{
+		pt[d[3]]=substr(d[1],m+1)
+	}}}{
+	split($0,d,"/");
+	if ("/" in fs)
+	{
+	result1=fs["/"];
+	}
+	if ("/" in pt)
+	{
+	result2=pt["/"];
+	}
+	for (i=2;i<=length(d);i++)
+	{
+	   p[i]=p[i-1]"/"d[i];
+	   if (p[i] in fs)
+		{
+		result1=fs[p[i]];
+		result2=pt[p[i]];
+		}
+	}
+	if (result2 in fs){
+		result=fs[result2]}
+	else{
+		result=result1}
+	print(result);}'
 }
 
 config_editor()
@@ -375,10 +648,9 @@ backup() {
 	done
 }
 start_service() {
-	# Reading config
 	rm /var/run/AdGserverdis >/dev/null 2>&1
 	config_load "${CONFIGURATION}"
-	# update password
+
 	config_get hashpass $CONFIGURATION hashpass ""
 	config_get configpath $CONFIGURATION configpath "/etc/AdGuardHome.yaml"
 	if [ -n "$hashpass" ]; then
@@ -387,13 +659,12 @@ start_service() {
 	fi
 	local enabled
 	config_get_bool enabled $CONFIGURATION enabled 0
-	# update crontab
 	do_crontab
 	if [ "$enabled" == "0" ]; then
 		_do_redirect 0
 		return
 	fi
-	#what need to do before reload
+
 	config_get workdir $CONFIGURATION workdir "/usr/bin/AdGuardHome"
 
 	config_get backupfile $CONFIGURATION backupfile ""
@@ -401,7 +672,7 @@ start_service() {
 	if [ -n "$backupfile" ] && [ ! -d "$workdir/data" ]; then
 		restore
 	fi
-	# for overlay data-stk-oo not suppport
+
 	local cwdfs=$(get_filesystem $workdir)
 	echo "workdir is a $cwdfs filesystem"
 	if [ "$cwdfs" == "jffs2" ]; then
@@ -409,15 +680,16 @@ start_service() {
 		logger "AdGuardHome" "warning db redirect to tmp"
 		touch $workdir/data/stats.db
 		if [ ! -L $workdir/data/stats.db ]; then
-		mv -f $workdir/data/stats.db /tmp/stats.db 2>/dev/null
-		ln -s /tmp/stats.db $workdir/data/stats.db 2>/dev/null
+			mv -f $workdir/data/stats.db /tmp/stats.db 2>/dev/null
+			ln -s /tmp/stats.db $workdir/data/stats.db 2>/dev/null
 		fi
 		touch $workdir/data/sessions.db
 		if [ ! -L $workdir/data/sessions.db ]; then
-		mv -f $workdir/data/sessions.db /tmp/sessions.db 2>/dev/null
-		ln -s /tmp/sessions.db $workdir/data/sessions.db 2>/dev/null
+			mv -f $workdir/data/sessions.db /tmp/sessions.db 2>/dev/null
+			ln -s /tmp/sessions.db $workdir/data/sessions.db 2>/dev/null
 		fi
 	fi
+
 	local ADDITIONAL_ARGS=""
 	config_get binpath $CONFIGURATION binpath "/usr/bin/AdGuardHome/AdGuardHome"
 
@@ -427,11 +699,10 @@ start_service() {
 	config_get httpport $CONFIGURATION httpport 3000
 	ADDITIONAL_ARGS="$ADDITIONAL_ARGS -p $httpport"
 
-	# hack to save config file when upgrade system
 	config_get upprotect $CONFIGURATION upprotect ""
 	eval upprotect=${upprotect// /\\\\n}
 	echo -e "$upprotect">/lib/upgrade/keep.d/luci-app-adguardhome
-	
+
 	config_get logfile $CONFIGURATION logfile ""
 	if [ -n "$logfile" ]; then
 		ADDITIONAL_ARGS="$ADDITIONAL_ARGS -l $logfile"
@@ -483,21 +754,21 @@ reload_service()
 }
 
 del_querylog(){
-local btarget=$(ls $backupwdpath/data | grep -F "querylog.json" | sort -r | head -n 1)
-local wtarget=$(ls $workdir/data | grep -F "querylog.json" | sort -r | head -n 1)
-if [ "$btarget"x == "$wtarget"x ]; then
-	[ -z "$btarget" ] && return 1
-	rm -f $workdir/data/$wtarget
-	rm -f $backupwdpath/data/$btarget
-	return 0
-fi
-if [ "$btarget" \> "$wtarget" ]; then
-	rm -f $backupwdpath/data/$btarget
-	return 0
-else
-	rm -f $workdir/data/$wtarget
-	return 0
-fi
+	local btarget=$(ls $backupwdpath/data 2>/dev/null | grep -F "querylog.json" | sort -r | head -n 1)
+	local wtarget=$(ls $workdir/data 2>/dev/null | grep -F "querylog.json" | sort -r | head -n 1)
+	if [ "$btarget"x == "$wtarget"x ]; then
+		[ -z "$btarget" ] && return 1
+		rm -f $workdir/data/$wtarget
+		rm -f $backupwdpath/data/$btarget
+		return 0
+	fi
+	if [ "$btarget" \> "$wtarget" ]; then
+		rm -f $backupwdpath/data/$btarget
+		return 0
+	else
+		rm -f $workdir/data/$wtarget
+		return 0
+	fi
 }
 stop_service()
 {
@@ -520,8 +791,8 @@ boot() {
 	fi
 }
 test_crontab(){
-config_load "${CONFIGURATION}"
-do_crontab
+	config_load "${CONFIGURATION}"
+	do_crontab
 }
 do_crontab(){
 	config_get_bool enabled $CONFIGURATION enabled 0
@@ -533,25 +804,21 @@ do_crontab(){
 	default="30 3 * * * /usr/share/AdGuardHome/update_core.sh 2>&1"
 	[ "$enabled" == "0" ] || [ "${crontab//autoupdate/}" == "$crontab" ] && cronenable=0 || cronenable=1
 	crontab_editor
-	
+
 	config_get workdir $CONFIGURATION workdir "/usr/bin/AdGuardHome"
 	config_get lastworkdir $CONFIGURATION lastworkdir "/usr/bin/AdGuardHome"
 	findstr="/usr/share/AdGuardHome/tailto.sh [0-9]* \$(uci get AdGuardHome.AdGuardHome.workdir)/data/querylog.json"
-	#[ -n "$lastworkdir" ] && findstr="/usr/share/AdGuardHome/tailto.sh [0-9]* $lastworkdir/data/querylog.json" && [ "$lastworkdir" != "$workdir" ] && replace="${lastworkdir//\//\\/}/${workdir//\//\\/}"
 	default="0 * * * * /usr/share/AdGuardHome/tailto.sh 2000 \$(uci get AdGuardHome.AdGuardHome.workdir)/data/querylog.json"
 	[ "$enabled" == "0" ] || [ "${crontab//cutquerylog/}" == "$crontab" ] && cronenable=0 || cronenable=1
 	crontab_editor
-	#[ "$lastworkdir" != "$workdir" ] && uci set AdGuardHome.AdGuardHome.lastworkdir="$workdir" && commit=1
-	
+
 	config_get logfile $CONFIGURATION logfile ""
 	config_get lastlogfile $CONFIGURATION lastlogfile ""
 	findstr="/usr/share/AdGuardHome/tailto.sh [0-9]* \$(uci get AdGuardHome.AdGuardHome.logfile)"
 	default="30 3 * * * /usr/share/AdGuardHome/tailto.sh 2000 \$(uci get AdGuardHome.AdGuardHome.logfile)"
-	#[ -n "$lastlogfile" ] && findstr="/usr/share/AdGuardHome/tailto.sh [0-9]* $lastlogfile" && [ -n "$logfile" ] && [ "$lastlogfile" != "$logfile" ] && replace="${lastlogfile//\//\\/}/${logfile//\//\\/}"
 	[ "$logfile" == "syslog" ] || [ "$logfile" == "" ] || [ "$enabled" == "0" ] || [ "${crontab//cutruntimelog/}" == "$crontab" ] && cronenable=0 || cronenable=1
 	crontab_editor
-	#[ -n "$logfile" ] && [ "$lastlogfile" != "$logfile" ] && uci set AdGuardHome.AdGuardHome.lastlogfile="$logfile" && commit=1
-	
+
 	findstr="/usr/share/AdGuardHome/addhost.sh"
 	default="0 * * * * /usr/share/AdGuardHome/addhost.sh"
 	[ "$enabled" == "0" ] || [ "${crontab//autohost/}" == "$crontab" ] && cronenable=0 || cronenable=1
@@ -563,18 +830,11 @@ do_crontab(){
 	[ "$enabled" == "0" ] || [ "${crontab//autogfw/}" == "$crontab" ] && cronenable=0 || cronenable=1
 	crontab_editor
 	[ "$cronreload" -gt 0 ] && /etc/init.d/cron restart
-	#[ "$commit" -gt 0 ] && uci commit AdGuardHome
 }
 crontab_editor(){
-	#usage input:
-	#findstr=
-	#default=
-	#cronenable=
-	#replace="${last//\//\\/}/${now//\//\\/}"
-	#output:cronreload:if >1 please /etc/init.d/cron restart manual
 	local testline reload
-	local line="$(grep "$findstr" $CRON_FILE)"
-	[ -n "$replace" ] && [ -n "$line" ] && eval testline="\${line//$replace}" && [ "$testline" != "$line" ] && line="$testline" && reload="1" && replace="" 
+	local line="$(grep "$findstr" $CRON_FILE 2>/dev/null)"
+	[ -n "$replace" ] && [ -n "$line" ] && eval testline="\${line//$replace}" && [ "$testline" != "$line" ] && line="$testline" && reload="1" && replace=""
 	if [ "${line:0:1}" != "#" ]; then
 		if [ $cronenable -eq 1 ]; then
 			[ -z "$line" ] && line="$default" && reload="1"
@@ -598,5 +858,4 @@ crontab_editor(){
 			echo "$line" >> $CRON_FILE
 		fi
 	fi
-	
 }

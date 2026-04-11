@@ -1,5 +1,16 @@
 #!/bin/bash
 PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+
+get_pkg_manager() {
+    if command -v apk >/dev/null 2>&1; then
+        echo "apk"
+    else
+        echo "opkg"
+    fi
+}
+
+PKG_MANAGER="$(get_pkg_manager)"
+
 binpath=$(uci get AdGuardHome.AdGuardHome.binpath)
 if [ -z "$binpath" ]; then
 uci set AdGuardHome.AdGuardHome.binpath="/tmp/AdGuardHome/AdGuardHome"
@@ -16,10 +27,17 @@ check_if_already_running(){
 check_wgetcurl(){
 	which curl && downloader="curl -L -k --retry 2 --connect-timeout 20 -o" && return
 	which wget-ssl && downloader="wget-ssl --no-check-certificate -t 2 -T 20 -O" && return
-	[ -z "$1" ] && opkg update || (echo error opkg && EXIT 1)
-	[ -z "$1" ] && (opkg remove wget wget-nossl --force-depends ; opkg install wget ; check_wgetcurl 1 ;return)
-	[ "$1" == "1" ] && (opkg install curl ; check_wgetcurl 2 ; return)
-	echo error curl and wget && EXIT 1
+	which wget && downloader="wget --no-check-certificate -t 2 -T 20 -O" && return
+	if [ "$PKG_MANAGER" == "apk" ]; then
+		[ -z "$1" ] && (echo "Installing curl..." && apk add curl 2>/dev/null) && check_wgetcurl 1 && return
+		[ "$1" == "1" ] && (echo "Installing wget..." && apk add wget 2>/dev/null) && check_wgetcurl 2 && return
+		echo "Error: Neither curl nor wget available, and installation failed." && EXIT 1
+	else
+		[ -z "$1" ] && opkg update || (echo "Error: opkg update failed" && EXIT 1)
+		[ -z "$1" ] && (opkg remove wget wget-nossl --force-depends 2>/dev/null ; opkg install wget ; check_wgetcurl 1 ;return)
+		[ "$1" == "1" ] && (opkg install curl ; check_wgetcurl 2 ; return)
+		echo "Error: Neither curl nor wget available, and opkg installation failed." && EXIT 1
+	fi
 }
 check_latest_version(){
 	check_wgetcurl
@@ -54,7 +72,11 @@ check_latest_version(){
 	fi
 }
 doupx(){
-	Archt="$(opkg info kernel | grep Architecture | awk -F "[ _]" '{print($2)}')"
+	if [ "$PKG_MANAGER" == "apk" ]; then
+		Archt="$(apk info kernel 2>/dev/null | grep Architecture || uname -m)"
+	else
+		Archt="$(opkg info kernel | grep Architecture | awk -F "[ _]" '{print($2)}')"
+	fi
 	case $Archt in
 	"i386")
 	Arch="i386"
@@ -64,6 +86,9 @@ doupx(){
 	echo -e "i686 use $Arch may have bug" 
 	;;
 	"x86")
+	Arch="amd64"
+	;;
+	"x86_64")
 	Arch="amd64"
 	;;
 	"mipsel")
@@ -105,7 +130,13 @@ doupx(){
 	upx_latest_ver="$($downloader - https://api.github.com/repos/upx/upx/releases/latest 2>/dev/null|grep -E 'tag_name' |grep -E '[0-9.]+' -o 2>/dev/null)"
 	$downloader /tmp/upx-${upx_latest_ver}-${Arch}_linux.tar.xz "https://github.com/upx/upx/releases/download/v${upx_latest_ver}/upx-${upx_latest_ver}-${Arch}_linux.tar.xz" 2>&1
 	#tar xvJf
-	which xz || (opkg list | grep ^xz || opkg update && opkg install xz) || (echo "xz download fail" && EXIT 1)
+	which xz || {
+		if [ "$PKG_MANAGER" == "apk" ]; then
+			apk add xz 2>/dev/null || (echo "xz download fail" && EXIT 1)
+		else
+			opkg list | grep ^xz || opkg update && opkg install xz || (echo "xz download fail" && EXIT 1)
+		fi
+	}
 	mkdir -p /tmp/upx-${upx_latest_ver}-${Arch}_linux
 	xz -d -c /tmp/upx-${upx_latest_ver}-${Arch}_linux.tar.xz| tar -x -C "/tmp" >/dev/null 2>&1
 	if [ ! -e "/tmp/upx-${upx_latest_ver}-${Arch}_linux/upx" ]; then
@@ -115,10 +146,14 @@ doupx(){
 	rm /tmp/upx-${upx_latest_ver}-${Arch}_linux.tar.xz
 }
 doupdate_core(){
-	echo -e "Updating core..." 
+	echo -e "Updating core..."
 	mkdir -p "/tmp/AdGuardHomeupdate"
 	rm -rf /tmp/AdGuardHomeupdate/* >/dev/null 2>&1
-	Archt="$(opkg info kernel | grep Architecture | awk -F "[ _]" '{print($2)}')"
+	if [ "$PKG_MANAGER" == "apk" ]; then
+		Archt="$(apk info kernel 2>/dev/null | grep Architecture || uname -m)"
+	else
+		Archt="$(opkg info kernel | grep Architecture | awk -F "[ _]" '{print($2)}')"
+	fi
 	case $Archt in
 	"i386")
 	Arch="386"
@@ -127,6 +162,9 @@ doupdate_core(){
 	Arch="386"
 	;;
 	"x86")
+	Arch="amd64"
+	;;
+	"x86_64")
 	Arch="amd64"
 	;;
 	"mipsel")
