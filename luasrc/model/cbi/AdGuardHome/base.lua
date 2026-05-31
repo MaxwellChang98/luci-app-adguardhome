@@ -2,7 +2,7 @@ require("luci.sys")
 require("luci.util")
 
 local m, s, o, o1
-local fs = require("nixio.fs")
+local fs = require("luci.fs")
 local uci = require("luci.model.uci").cursor()
 local http = require("luci.http")
 
@@ -14,12 +14,13 @@ m = Map("AdGuardHome", translate("AdGuard Home"))
 m.description = translate("Free and open source, powerful network-wide ads & trackers blocking DNS server.")
 m:section(SimpleSection).template = "AdGuardHome/AdGuardHome_status"
 
--- Main Section
-s = m:section(TypedSection, "AdGuardHome")
-s.anonymous = true
-s.addremove = false
+local function settings_section(title, description)
+	local section = m:section(NamedSection, "AdGuardHome", "AdGuardHome", translate(title), translate(description))
+	section.addremove = false
+	return section
+end
 
--- Basic Settings
+s = settings_section("Essentials", "Start here: service switch, web port and DNS traffic mode.")
 s:option(Flag, "enabled", translate("Enable"))
 
 o = s:option(Value, "httpport", translate("Browser management port"))
@@ -35,38 +36,9 @@ local port = luci.sys.exec("awk '/^dns:/ {found_dns=1} found_dns && /^  port:/ {
 if port == "" then
 	port = "?"
 end
--- Update
-local binmtime = uci:get("AdGuardHome", "AdGuardHome", "binmtime") or "0"
-local e = ""
-if not fs.access(configpath) then
-	e = e .. " " .. translate("no config")
-end
-if not fs.access(binpath) then
-	e = e .. " " .. translate("no core")
-else
-	local version = uci:get("AdGuardHome", "AdGuardHome", "version")
-	local testtime = fs.stat(binpath, "mtime")
-	if testtime ~= tonumber(binmtime) or version == nil then
-		local tmp = luci.sys.exec(binpath .. " -c /dev/null --check-config 2>&1 | grep -m 1 -E 'v[0-9.]+' -o")
-		version = string.sub(tmp, 1, -2)
-		if version == "" then
-			version = "core error"
-		end
-		uci:set("AdGuardHome", "AdGuardHome", "version", version)
-		uci:set("AdGuardHome", "AdGuardHome", "binmtime", testtime)
-		uci:save("AdGuardHome")
-	end
-	e = version .. e
-end
-
-o = s:option(Button, "restart", translate("Update"))
-o.inputtitle = translate("Update core version")
-o.template = "AdGuardHome/AdGuardHome_check"
-o.showfastconfig = (not fs.access(configpath))
-o.description = string.format(translate("core version:") .. " <strong>%s</strong>", e)
 
 -- Redirect
-o = s:option(ListValue, "redirect", port .. translate("Redirect"))
+o = s:option(ListValue, "redirect", translate("DNS Redirect"))
 o:value("none", translate("none"))
 o:value("dnsmasq-upstream", translate("Run as dnsmasq upstream server"))
 o:value("redirect", translate("Redirect 53 port to AdGuardHome"))
@@ -74,7 +46,7 @@ o:value("exchange", translate("Use port 53 replace dnsmasq"))
 o.default = "none"
 o.optional = false
 
--- Core Management
+s = settings_section("Core & Files", "Binary, YAML, work directory, compression and updater controls.")
 o = s:option(Value, "binpath", translate("Bin Path"), translate("AdGuardHome Bin path if no bin will auto download"))
 o.default = "/usr/bin/AdGuardHome/AdGuardHome"
 o.datatype = "string"
@@ -168,6 +140,7 @@ o.showfastconfig = (not fs.access(configpath))
 o.description = string.format(translate("core version:") .. " <strong>%s</strong>", e)
 
 -- GFW List
+s = settings_section("Rules & Access", "Generated DNS helpers, upstream resolver and web console password.")
 local a = luci.sys.call("grep -m 1 -q programadd " .. configpath .. " 2>/dev/null")
 if a == 0 then
 	a = "Added"
@@ -196,7 +169,6 @@ o.default = "tcp://208.67.220.220:5353"
 o.datatype = "string"
 o.optional = false
 
--- Security
 o = s:option(Value, "hashpass", translate("Change browser management password"), translate("Press load culculate model and culculate finally save/apply"))
 o.default = ""
 o.datatype = "string"
@@ -204,6 +176,7 @@ o.template = "AdGuardHome/AdGuardHome_chpass"
 o.optional = false
 
 -- Logging
+s = settings_section("Logs & Maintenance", "Runtime logs, upgrade protection, backup files and scheduled jobs.")
 o = s:option(Value, "logfile", translate("Runtime log file"), translate("AdGuardHome runtime Log file if 'syslog': write to system log;if empty no log"))
 o.datatype = "string"
 o.rmempty = true
@@ -293,6 +266,7 @@ o.rmempty = true
 o.optional = false
 
 -- Download Links
+s = settings_section("Download Sources", "Mirrors used by the core updater.")
 o = s:option(TextValue, "downloadlinks", translate("Download links for update"))
 o.optional = false
 o.rows = 4

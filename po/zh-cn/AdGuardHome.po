@@ -59,8 +59,74 @@ msgstr "警告：未找到核心程序，保存前将无法校验配置"
 msgid "Open AdGuard Home Web UI"
 msgstr "打开 AdGuard Home 网页后台"
 
+msgid "Essentials"
+msgstr "关键配置"
+
+msgid "Start here: service switch, web port and DNS traffic mode."
+msgstr "先完成服务开关、网页端口和 DNS 流量模式。"
+
+msgid "Core & Files"
+msgstr "核心与文件"
+
+msgid "Binary, YAML, work directory, compression and updater controls."
+msgstr "管理执行文件、YAML 配置、工作目录、压缩和核心更新。"
+
+msgid "Rules & Access"
+msgstr "规则与访问"
+
+msgid "Generated DNS helpers, upstream resolver and web console password."
+msgstr "管理生成规则、上游解析服务和网页控制台密码。"
+
+msgid "Logs & Maintenance"
+msgstr "日志与维护"
+
+msgid "Runtime logs, upgrade protection, backup files and scheduled jobs."
+msgstr "集中管理运行日志、升级保留、备份文件和计划任务。"
+
+msgid "Download Sources"
+msgstr "下载源"
+
 msgid "Service"
 msgstr "服务"
+
+msgid "Enable AdGuard Home and choose how DNS traffic is handled."
+msgstr "启用 AdGuard Home，并选择 DNS 流量处理方式。"
+
+msgid "Core"
+msgstr "核心"
+
+msgid "Binary, YAML, work directory and updater controls."
+msgstr "管理执行文件、YAML 配置、工作目录和核心更新。"
+
+msgid "DNS Rules"
+msgstr "DNS 规则"
+
+msgid "Manage generated rule helpers and their upstream resolver."
+msgstr "管理生成规则的辅助功能和上游解析服务。"
+
+msgid "Security"
+msgstr "安全"
+
+msgid "Update the password hash for the AdGuard Home web console."
+msgstr "更新 AdGuard Home 网页控制台使用的密码哈希。"
+
+msgid "Logs"
+msgstr "日志"
+
+msgid "Runtime logging options for troubleshooting."
+msgstr "用于排查问题的运行日志选项。"
+
+msgid "Persistence"
+msgstr "持久化"
+
+msgid "Keep important files, backups and scheduled maintenance together."
+msgstr "集中管理保留文件、备份行为和计划维护任务。"
+
+msgid "Downloads"
+msgstr "下载"
+
+msgid "Mirrors used by the core updater."
+msgstr "核心更新器使用的下载镜像。"
 
 msgid "DNS Redirect"
 msgstr "DNS 重定向"
@@ -110,6 +176,9 @@ msgid "Update Log"
 msgstr "更新日志"
 
 msgid "Fast config"
+msgstr "快速配置"
+
+msgid "Fast Config"
 msgstr "快速配置"
 
 # description change

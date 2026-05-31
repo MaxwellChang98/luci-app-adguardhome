@@ -1,4 +1,46 @@
 <%+cbi/valueheader%>
+<script type="text/javascript">
+//<![CDATA[
+(function () {
+	function markLogShell() {
+		var page = document.querySelector(".ag-log-page");
+		var node;
+
+		if (!page) {
+			return;
+		}
+
+		for (node = page.parentNode; node && node !== document.body; node = node.parentNode) {
+			if (node.classList) {
+				if (node.classList.contains("cbi-map")) {
+					node.classList.add("adguardhome-log-map");
+				}
+				if (node.classList.contains("cbi-section")) {
+					node.classList.add("adguardhome-log-section");
+				}
+				if (node.classList.contains("cbi-section-node")) {
+					node.classList.add("adguardhome-log-section-node");
+				}
+				if (node.classList.contains("cbi-value")) {
+					node.classList.add("adguardhome-log-row");
+				}
+				if (node.tagName === "FORM") {
+					node.classList.add("adguardhome-log-form");
+				}
+			}
+		}
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", markLogShell);
+	} else {
+		markLogShell();
+	}
+	window.setTimeout(markLogShell, 0);
+	window.setTimeout(markLogShell, 250);
+})();
+//]]>
+</script>
 <div class="ag-log-page">
 
 	<div class="ag-log-toolbar">
@@ -33,22 +75,184 @@
 </div>
 
 <style>
+.adguardhome-log-map,
+.ag-log-page {
+	--ag-card-bg: rgba(255, 255, 255, 0.96);
+	--ag-control-bg: #f6f6f8;
+	--ag-log-bg: #fbfbfd;
+	--ag-card-border: rgba(0, 0, 0, 0.08);
+	--ag-row-border: rgba(0, 0, 0, 0.07);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 12px 28px rgba(0, 0, 0, 0.05);
+	--ag-text-primary: #1d1d1f;
+	--ag-text-secondary: #6e6e73;
+	--ag-text-tertiary: #86868b;
+	--ag-focus-ring: rgba(0, 122, 255, 0.16);
+	--ag-blue: #007aff;
+	--ag-red: #ff3b30;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	.adguardhome-log-map,
+	.ag-log-page {
+		--ag-card-bg: rgba(28, 28, 30, 0.96);
+		--ag-control-bg: #2c2c2e;
+		--ag-log-bg: #1c1c1e;
+		--ag-card-border: rgba(255, 255, 255, 0.1);
+		--ag-row-border: rgba(255, 255, 255, 0.09);
+		--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 30px rgba(0, 0, 0, 0.35);
+		--ag-text-primary: #f5f5f7;
+		--ag-text-secondary: #a1a1a6;
+		--ag-text-tertiary: #8e8e93;
+		--ag-focus-ring: rgba(10, 132, 255, 0.24);
+		color-scheme: dark;
+	}
+}
+
+html[data-theme="light"] .adguardhome-log-map,
+html[data-theme-mode="light"] .adguardhome-log-map,
+html[data-color-scheme="light"] .adguardhome-log-map,
+html[data-bs-theme="light"] .adguardhome-log-map,
+html.light .adguardhome-log-map,
+html.light-mode .adguardhome-log-map,
+body[data-theme="light"] .adguardhome-log-map,
+body[data-theme-mode="light"] .adguardhome-log-map,
+body[data-color-scheme="light"] .adguardhome-log-map,
+body[data-bs-theme="light"] .adguardhome-log-map,
+body.light .adguardhome-log-map,
+body.light-mode .adguardhome-log-map,
+html[data-theme="light"] .ag-log-page,
+html[data-theme-mode="light"] .ag-log-page,
+html[data-color-scheme="light"] .ag-log-page,
+html[data-bs-theme="light"] .ag-log-page,
+html.light .ag-log-page,
+html.light-mode .ag-log-page,
+body[data-theme="light"] .ag-log-page,
+body[data-theme-mode="light"] .ag-log-page,
+body[data-color-scheme="light"] .ag-log-page,
+body[data-bs-theme="light"] .ag-log-page,
+body.light .ag-log-page,
+body.light-mode .ag-log-page {
+	--ag-card-bg: rgba(255, 255, 255, 0.96);
+	--ag-control-bg: #f6f6f8;
+	--ag-log-bg: #fbfbfd;
+	--ag-card-border: rgba(0, 0, 0, 0.08);
+	--ag-row-border: rgba(0, 0, 0, 0.07);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 12px 28px rgba(0, 0, 0, 0.05);
+	--ag-text-primary: #1d1d1f;
+	--ag-text-secondary: #6e6e73;
+	--ag-text-tertiary: #86868b;
+	--ag-focus-ring: rgba(0, 122, 255, 0.16);
+	color-scheme: light;
+}
+
+html[data-theme="dark"] .adguardhome-log-map,
+html[data-theme-mode="dark"] .adguardhome-log-map,
+html[data-color-scheme="dark"] .adguardhome-log-map,
+html[data-bs-theme="dark"] .adguardhome-log-map,
+html.dark .adguardhome-log-map,
+html.dark-mode .adguardhome-log-map,
+html.darkmode .adguardhome-log-map,
+body[data-theme="dark"] .adguardhome-log-map,
+body[data-theme-mode="dark"] .adguardhome-log-map,
+body[data-color-scheme="dark"] .adguardhome-log-map,
+body[data-bs-theme="dark"] .adguardhome-log-map,
+body.dark .adguardhome-log-map,
+body.dark-mode .adguardhome-log-map,
+body.darkmode .adguardhome-log-map,
+html[data-theme="dark"] .ag-log-page,
+html[data-theme-mode="dark"] .ag-log-page,
+html[data-color-scheme="dark"] .ag-log-page,
+html[data-bs-theme="dark"] .ag-log-page,
+html.dark .ag-log-page,
+html.dark-mode .ag-log-page,
+html.darkmode .ag-log-page,
+body[data-theme="dark"] .ag-log-page,
+body[data-theme-mode="dark"] .ag-log-page,
+body[data-color-scheme="dark"] .ag-log-page,
+body[data-bs-theme="dark"] .ag-log-page,
+body.dark .ag-log-page,
+body.dark-mode .ag-log-page,
+body.darkmode .ag-log-page {
+	--ag-card-bg: rgba(28, 28, 30, 0.96);
+	--ag-control-bg: #2c2c2e;
+	--ag-log-bg: #1c1c1e;
+	--ag-card-border: rgba(255, 255, 255, 0.1);
+	--ag-row-border: rgba(255, 255, 255, 0.09);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 30px rgba(0, 0, 0, 0.35);
+	--ag-text-primary: #f5f5f7;
+	--ag-text-secondary: #a1a1a6;
+	--ag-text-tertiary: #8e8e93;
+	--ag-focus-ring: rgba(10, 132, 255, 0.24);
+	color-scheme: dark;
+}
+
+html body #maincontent form.adguardhome-log-form,
+html body #maincontent .cbi-map.adguardhome-log-map {
+	display: block !important;
+	width: 100% !important;
+	max-width: 1120px !important;
+	margin: 0 auto !important;
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+	color: var(--ag-text-primary) !important;
+}
+
+html body #maincontent .cbi-map.adguardhome-log-map > h2,
+html body #maincontent .cbi-map.adguardhome-log-map > .cbi-map-descr,
+html body #maincontent .adguardhome-log-section > legend,
+html body #maincontent .adguardhome-log-section > h3,
+html body #maincontent .adguardhome-log-row > .cbi-value-title,
+html body #maincontent .adguardhome-log-row > .cbi-value-description {
+	display: none !important;
+}
+
+html body #maincontent .adguardhome-log-section,
+html body #maincontent .adguardhome-log-section > .cbi-section-node,
+html body #maincontent .adguardhome-log-section-node,
+html body #maincontent .adguardhome-log-row,
+html body #maincontent .adguardhome-log-row > .cbi-value-field {
+	display: block !important;
+	width: 100% !important;
+	max-width: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
 .ag-log-page {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: 14px;
+	width: 100%;
+	max-width: 1120px;
+	margin: 0 auto;
+	padding: 16px;
+	border-radius: 14px;
+	background: color-mix(in srgb, var(--ag-card-bg) 76%, transparent);
+	border: 1px solid var(--ag-card-border);
+	box-shadow: var(--ag-card-shadow);
+	box-sizing: border-box;
+	color: var(--ag-text-primary);
+	font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
 .ag-log-toolbar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 12px 16px;
-	border-radius: 10px;
-	background: var(--ag-card-bg, #fff);
-	border: 1px solid rgba(0,0,0,.06);
+	padding: 14px 16px;
+	border-radius: 12px;
+	background: var(--ag-card-bg);
+	border: 1px solid var(--ag-card-border);
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
 	flex-wrap: wrap;
-	gap: 10px;
+	gap: 12px;
 }
 
 .ag-log-controls, .ag-log-actions {
@@ -60,34 +264,54 @@
 .ag-log-ctrl {
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 7px;
 	font-size: 13px;
-	color: var(--ag-text-secondary, #86868b);
+	font-weight: 500;
+	color: var(--ag-text-secondary);
 	cursor: pointer;
+	opacity: 1;
 }
 
-.ag-log-ctrl input { accent-color: #007AFF; }
+.ag-log-ctrl span {
+	color: inherit;
+	opacity: 1;
+}
+
+.ag-log-ctrl input {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	accent-color: var(--ag-blue);
+}
 
 .ag-log-view {
-	border-radius: 10px;
+	border-radius: 12px;
 	overflow: hidden;
-	background: var(--ag-card-bg, #fff);
-	border: 1px solid rgba(0,0,0,.06);
+	background: var(--ag-log-bg);
+	border: 1px solid var(--ag-card-border);
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
 }
 
 .ag-log-ta {
 	display: block;
 	width: 100%;
 	box-sizing: border-box;
-	border: none;
-	background: transparent;
+	border: none !important;
+	background: var(--ag-log-bg) !important;
 	font-family: 'SF Mono', Monaco, 'Courier New', monospace;
 	font-size: 12px;
 	line-height: 1.6;
-	color: var(--ag-text-primary, #1d1d1f);
-	padding: 14px;
+	color: var(--ag-text-primary) !important;
+	padding: 16px;
 	resize: none;
 	outline: none;
+	min-height: 520px;
+	box-shadow: inset 0 1px 0 var(--ag-row-border);
+	caret-color: var(--ag-blue);
+}
+
+.ag-log-ta::placeholder {
+	color: var(--ag-text-tertiary);
 }
 
 .ag-btn {
@@ -96,7 +320,7 @@
 	justify-content: center;
 	gap: 5px;
 	padding: 8px 14px;
-	border: none;
+	border: 1px solid transparent;
 	border-radius: 8px;
 	font-size: 13px;
 	font-weight: 500;
@@ -116,16 +340,116 @@
 .ag-btn-sm { padding: 6px 12px; font-size: 12px; }
 
 .ag-btn-outline {
-	background: transparent;
-	border: 1px solid rgba(0,0,0,.12);
-	color: var(--ag-text-primary, #1d1d1f);
+	background: var(--ag-control-bg);
+	border-color: var(--ag-card-border);
+	color: var(--ag-text-primary);
 }
 
-.ag-btn-outline:hover { background: rgba(0,0,0,.03); }
+.ag-btn-outline:hover {
+	box-shadow: 0 0 0 4px var(--ag-focus-ring);
+}
 
 .ag-btn-danger {
-	background: rgba(255,59,48,.1);
-	color: #FF3B30;
+	background: rgba(255, 59, 48, 0.12);
+	color: var(--ag-red);
+}
+
+.ag-btn-danger:hover {
+	box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.14);
+}
+
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form > .cbi-map.adguardhome-log-map,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-section.adguardhome-log-section,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .adguardhome-log-section > .cbi-section-node,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .adguardhome-log-section-node,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-value.adguardhome-log-row,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-value.adguardhome-log-row > .cbi-value-field,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form > .cbi-map.adguardhome-log-map,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form .cbi-section.adguardhome-log-section,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form .adguardhome-log-section > .cbi-section-node,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form .adguardhome-log-section-node,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form .cbi-value.adguardhome-log-row,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-log"] #maincontent form.adguardhome-log-form .cbi-value.adguardhome-log-row > .cbi-value-field {
+	display: block !important;
+	width: 100% !important;
+	max-width: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form > .cbi-map.adguardhome-log-map::before,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form > .cbi-map.adguardhome-log-map::after,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-section.adguardhome-log-section::before,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-section.adguardhome-log-section::after,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .adguardhome-log-section > .cbi-section-node::before,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .adguardhome-log-section > .cbi-section-node::after,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-value.adguardhome-log-row::before,
+html body.apple-theme-v2 #maincontent form.adguardhome-log-form .cbi-value.adguardhome-log-row::after {
+	display: none !important;
+	content: none !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
+html body #maincontent .ag-log-page .ag-log-ctrl,
+html body #maincontent .ag-log-page .ag-log-ctrl span {
+	color: var(--ag-text-secondary) !important;
+	opacity: 1 !important;
+}
+
+html body #maincontent .ag-log-page .ag-log-ta {
+	box-shadow: inset 0 1px 0 var(--ag-row-border) !important;
+}
+
+html body #maincontent .ag-log-page .ag-btn {
+	box-shadow: none !important;
+}
+
+html body #maincontent .ag-log-page .ag-btn-outline:hover {
+	box-shadow: 0 0 0 4px var(--ag-focus-ring) !important;
+}
+
+html body #maincontent .ag-log-page .ag-btn-danger:hover {
+	box-shadow: 0 0 0 4px rgba(255, 59, 48, 0.14) !important;
+}
+
+@supports not (background: color-mix(in srgb, white, black)) {
+	.ag-log-page {
+		background: var(--ag-card-bg);
+	}
+}
+
+@media (max-width: 760px) {
+	.ag-log-page {
+		padding: 12px;
+	}
+
+	.ag-log-toolbar,
+	.ag-log-controls,
+	.ag-log-actions {
+		align-items: stretch;
+		width: 100%;
+	}
+
+	.ag-log-toolbar {
+		flex-direction: column;
+	}
+
+	.ag-log-actions .ag-btn {
+		flex: 1 1 0;
+	}
+
+	.ag-log-ta {
+		min-height: 420px;
+	}
 }
 </style>
 

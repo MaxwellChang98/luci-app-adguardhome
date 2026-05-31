@@ -1,5 +1,5 @@
 local m, s, o
-local fs = require("nixio.fs")
+local fs = require("luci.fs")
 local uci = require("luci.model.uci").cursor()
 local sys = require("luci.sys")
 local http = require("luci.http")
@@ -46,6 +46,13 @@ s = m:section(TypedSection, "AdGuardHome")
 s.anonymous = true
 s.addremove = false
 
+o = s:option(DummyValue, "")
+o.anonymous = true
+o.template = "AdGuardHome/yamleditor"
+if not fs.access(binpath) then
+	o.description = translate("WARNING: No core binary found, config will not be validated before apply")
+end
+
 o = s:option(TextValue, "escconf")
 o.rows = 66
 o.wrap = "off"
@@ -70,13 +77,6 @@ o.write = function(self, section, value)
 end
 o.remove = function(self, section, value)
 	fs.writefile(configpath, "")
-end
-
-o = s:option(DummyValue, "")
-o.anonymous = true
-o.template = "AdGuardHome/yamleditor"
-if not fs.access(binpath) then
-	o.description = translate("WARNING: No core binary found, config will not be validated before apply")
 end
 
 if fs.access("/tmp/AdGuardHometmpconfig.yaml") then

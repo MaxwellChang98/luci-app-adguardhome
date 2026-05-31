@@ -7,11 +7,11 @@ local lastmd5=$(uci get AdGuardHome.AdGuardHome.gfwlistmd5 2>/dev/null)
 if [ "$nowmd5" != "$lastmd5" ]; then
 	uci set AdGuardHome.AdGuardHome.gfwlistmd5="$nowmd5"
 	uci commit AdGuardHome
-	[ "$1" == "noreload" ] || /etc/init.d/AdGuardHome reload
+	[ "$1" = "noreload" ] || /etc/init.d/AdGuardHome reload
 fi
 }
 configpath=$(uci get AdGuardHome.AdGuardHome.configpath 2>/dev/null)
-[ "$1" == "del" ] && sed -i '/programaddstart/,/programaddend/d' $configpath && checkmd5 "$2" && exit 0
+[ "$1" = "del" ] && sed -i '/programaddstart/,/programaddend/d' $configpath && checkmd5 "$2" && exit 0
 gfwupstream=$(uci get AdGuardHome.AdGuardHome.gfwupstream 2>/dev/null)
 if [ -z $gfwupstream ]; then
 gfwupstream="tcp://208.67.220.220:5353"
@@ -20,7 +20,15 @@ if [ ! -f "$configpath" ]; then
 	echo "please make a config first"
 	exit 1
 fi
-wget-ssl --no-check-certificate https://cdn.jsdelivr.net/gh/gfwlist/gfwlist/gfwlist.txt -O- | base64 -d > /tmp/gfwlist.txt
+
+check_wgetcurl(){
+	which curl >/dev/null 2>&1 && downloader="curl -L -k --retry 2 --connect-timeout 20 -o" && return
+	which wget-ssl >/dev/null 2>&1 && downloader="wget-ssl --no-check-certificate -t 2 -T 20 -O" && return
+	which wget >/dev/null 2>&1 && downloader="wget --no-check-certificate -t 2 -T 20 -O" && return
+	echo "Error: Neither curl nor wget available" && exit 1
+}
+check_wgetcurl
+$downloader - https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt | base64 -d > /tmp/gfwlist.txt
 cat /tmp/gfwlist.txt | awk -v upst="$gfwupstream" 'BEGIN{getline;}{
 s1=substr($0,1,1);
 if (s1=="!")
@@ -75,7 +83,7 @@ else{
     print("  - '\''[/"fin"/]#'\''");}
 }END{print("  - '\''[/programaddend/]#'\''")}' > /tmp/adguard.list
 grep programaddstart $configpath
-if [ "$?" == "0" ]; then
+if [ "$?" = "0" ]; then
 	sed -i '/programaddstart/,/programaddend/c\  - '\''\[\/programaddstart\/\]#'\''' $configpath
 	sed -i '/programaddstart/'r/tmp/adguard.list $configpath
 else

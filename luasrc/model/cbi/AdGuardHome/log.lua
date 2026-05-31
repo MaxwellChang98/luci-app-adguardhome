@@ -1,4 +1,4 @@
-local fs=require"nixio.fs"
+local fs = require("luci.fs")
 local uci=require"luci.model.uci".cursor()
 local f,t
 f=SimpleForm("logview")

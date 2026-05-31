@@ -1,9 +1,128 @@
 <script type="text/javascript">//<![CDATA[
 (function () {
+	var cleanupFrame = 0;
+
+	function clearThemeServiceDecorations(root) {
+		var scope = root || document;
+		var serviceClasses = [
+			"apple-service-action-cell",
+			"apple-service-action-value",
+			"apple-service-button",
+			"apple-service-button-row",
+			"apple-service-compact-button",
+			"apple-service-icon-button",
+			"apple-service-icon-media",
+			"apple-service-multi-action-value",
+			"apple-service-normal-button",
+			"apple-service-primary-button",
+			"apple-service-single-action",
+			"apple-service-wide-button"
+		];
+		var selector = serviceClasses.map(function (name) {
+			return "." + name;
+		}).join(",");
+		var nodes = selector ? scope.querySelectorAll(selector) : [];
+
+		for (var i = 0; i < nodes.length; i++) {
+			for (var j = 0; j < serviceClasses.length; j++) {
+				nodes[i].classList.remove(serviceClasses[j]);
+			}
+		}
+	}
+
+	function scheduleThemeCleanup(root) {
+		if (cleanupFrame) {
+			return;
+		}
+
+		cleanupFrame = window.requestAnimationFrame(function () {
+			cleanupFrame = 0;
+			clearThemeServiceDecorations(root);
+		});
+	}
+
+	function resetSectionRole(section) {
+		var classes = [];
+
+		section.classList.remove("ag-status-section", "ag-settings-section");
+		for (var i = 0; i < section.classList.length; i++) {
+			if (section.classList[i].indexOf("ag-section-") === 0) {
+				classes.push(section.classList[i]);
+			}
+		}
+		for (var j = 0; j < classes.length; j++) {
+			section.classList.remove(classes[j]);
+		}
+		section.removeAttribute("data-ag-section");
+	}
+
+	function normalizeOptionGrids(map) {
+		var optionRows = [
+			"cbi-AdGuardHome-AdGuardHome-upprotect",
+			"cbi-AdGuardHome-AdGuardHome-backupfile",
+			"cbi-AdGuardHome-AdGuardHome-crontab"
+		];
+
+		for (var i = 0; i < optionRows.length; i++) {
+			var row = map.querySelector("#" + optionRows[i]);
+			var host = row ? row.querySelector(".cbi-value-field > .cbi-checkbox, .cbi-value-field > .cbi-radio, .cbi-value-field > div") : null;
+
+			if (!host) {
+				continue;
+			}
+
+			for (var j = host.childNodes.length - 1; j >= 0; j--) {
+				var child = host.childNodes[j];
+
+				if (child.nodeType === 3 && child.textContent.replace(/\u00a0/g, "").trim() === "") {
+					host.removeChild(child);
+				} else if (child.nodeType === 1 && child.tagName === "BR") {
+					host.removeChild(child);
+				}
+			}
+		}
+	}
+
 	function markPage() {
 		var map = document.querySelector(".cbi-map");
 		if (map) {
 			map.classList.add("adguardhome-luci-page");
+			var sections = [];
+			var sectionNames = ["essentials", "core-files", "rules-access", "maintenance", "downloads"];
+			for (var i = 0; i < map.children.length; i++) {
+				var node = map.children[i];
+				if ((" " + node.className + " ").indexOf(" cbi-section ") >= 0) {
+					sections.push(node);
+				}
+			}
+			for (var k = 0; k < map.children.length; k++) {
+				if ((" " + map.children[k].className + " ").indexOf(" ag-status-bar ") >= 0) {
+					map.children[k].classList.add("ag-status-section");
+				}
+			}
+			for (var j = 0, sectionIndex = 0; j < sections.length; j++) {
+				resetSectionRole(sections[j]);
+				if (sections[j].querySelector(".ag-status-bar")) {
+					sections[j].classList.add("ag-status-section");
+				} else {
+					var name = sectionNames[sectionIndex] || ("section-" + sectionIndex);
+					sections[j].classList.add("ag-settings-section", "ag-section-" + name);
+					sections[j].setAttribute("data-ag-section", name);
+					sectionIndex++;
+				}
+			}
+			normalizeOptionGrids(map);
+			clearThemeServiceDecorations(map);
+			window.setTimeout(function () { normalizeOptionGrids(map); clearThemeServiceDecorations(map); }, 0);
+			window.setTimeout(function () { normalizeOptionGrids(map); clearThemeServiceDecorations(map); }, 250);
+			window.setTimeout(function () { normalizeOptionGrids(map); clearThemeServiceDecorations(map); }, 1000);
+			if (window.MutationObserver && map.dataset.agThemeCleanupBound !== "true") {
+				map.dataset.agThemeCleanupBound = "true";
+				new MutationObserver(function () {
+					normalizeOptionGrids(map);
+					scheduleThemeCleanup(map);
+				}).observe(map, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+			}
 		}
 	}
 	if (document.readyState === "loading") {
@@ -50,98 +169,271 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 </script>
 
 <style>
-/* Apple-style tokens */
 :root {
-	--ag-card-bg: #ffffff;
-	--ag-card-border: rgba(0, 0, 0, 0.06);
-	--ag-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
-	--ag-card-radius: 12px;
-	--ag-header-bg-blue: linear-gradient(135deg, #007AFF 0%, #5E5CE6 100%);
-	--ag-header-bg-green: linear-gradient(135deg, #34C759 0%, #30D158 100%);
+	--ag-card-bg: rgba(255, 255, 255, 0.96);
+	--ag-control-bg: #f6f6f8;
+	--ag-card-border: rgba(0, 0, 0, 0.08);
+	--ag-row-border: rgba(0, 0, 0, 0.07);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 12px 28px rgba(0, 0, 0, 0.05);
+	--ag-card-radius: 8px;
+	--ag-blue: #007aff;
+	--ag-green: #34c759;
+	--ag-orange: #ff9500;
+	--ag-red: #ff3b30;
+	--ag-purple: #af52de;
+	--ag-gray: #8e8e93;
 	--ag-text-primary: #1d1d1f;
-	--ag-text-secondary: #86868b;
-	--ag-spacing: 16px;
-	--ag-spacing-lg: 20px;
+	--ag-text-secondary: #6e6e73;
+	--ag-text-tertiary: #86868b;
+	--ag-focus-ring: rgba(0, 122, 255, 0.16);
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--ag-card-bg: #1c1c1e;
+		--ag-card-bg: rgba(28, 28, 30, 0.96);
+		--ag-control-bg: #2c2c2e;
 		--ag-card-border: rgba(255, 255, 255, 0.08);
-		--ag-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+		--ag-row-border: rgba(255, 255, 255, 0.08);
+		--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 30px rgba(0, 0, 0, 0.35);
 		--ag-text-primary: #f5f5f7;
 		--ag-text-secondary: #a1a1a6;
+		--ag-text-tertiary: #8e8e93;
 	}
 }
 
-/* Page shell: title + description */
 .adguardhome-luci-page {
-	max-width: 920px;
+	--ag-card-bg: rgba(255, 255, 255, 0.96);
+	--ag-control-bg: #f6f6f8;
+	--ag-card-border: rgba(0, 0, 0, 0.08);
+	--ag-row-border: rgba(0, 0, 0, 0.07);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 12px 28px rgba(0, 0, 0, 0.05);
+	--ag-text-primary: #1d1d1f;
+	--ag-text-secondary: #6e6e73;
+	--ag-text-tertiary: #86868b;
+	--ag-focus-ring: rgba(0, 122, 255, 0.16);
+	color-scheme: light;
+	max-width: 1120px;
 	margin: 0 auto;
+	padding-bottom: 24px;
+	color: var(--ag-text-primary);
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	gap: 14px 16px;
+	font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+	.adguardhome-luci-page {
+		--ag-card-bg: rgba(28, 28, 30, 0.96);
+		--ag-control-bg: #2c2c2e;
+		--ag-card-border: rgba(255, 255, 255, 0.1);
+		--ag-row-border: rgba(255, 255, 255, 0.09);
+		--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 30px rgba(0, 0, 0, 0.35);
+		--ag-text-primary: #f5f5f7;
+		--ag-text-secondary: #a1a1a6;
+		--ag-text-tertiary: #8e8e93;
+		--ag-focus-ring: rgba(10, 132, 255, 0.24);
+		color-scheme: dark;
+	}
+}
+
+html[data-theme="light"] .adguardhome-luci-page,
+html[data-theme-mode="light"] .adguardhome-luci-page,
+html[data-color-scheme="light"] .adguardhome-luci-page,
+html[data-bs-theme="light"] .adguardhome-luci-page,
+html.light .adguardhome-luci-page,
+html.light-mode .adguardhome-luci-page,
+body[data-theme="light"] .adguardhome-luci-page,
+body[data-theme-mode="light"] .adguardhome-luci-page,
+body[data-color-scheme="light"] .adguardhome-luci-page,
+body[data-bs-theme="light"] .adguardhome-luci-page,
+body.light .adguardhome-luci-page,
+body.light-mode .adguardhome-luci-page {
+	--ag-card-bg: rgba(255, 255, 255, 0.96);
+	--ag-control-bg: #f6f6f8;
+	--ag-card-border: rgba(0, 0, 0, 0.08);
+	--ag-row-border: rgba(0, 0, 0, 0.07);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 12px 28px rgba(0, 0, 0, 0.05);
+	--ag-text-primary: #1d1d1f;
+	--ag-text-secondary: #6e6e73;
+	--ag-text-tertiary: #86868b;
+	--ag-focus-ring: rgba(0, 122, 255, 0.16);
+	color-scheme: light;
+}
+
+html[data-theme="dark"] .adguardhome-luci-page,
+html[data-theme-mode="dark"] .adguardhome-luci-page,
+html[data-color-scheme="dark"] .adguardhome-luci-page,
+html[data-bs-theme="dark"] .adguardhome-luci-page,
+html.dark .adguardhome-luci-page,
+html.dark-mode .adguardhome-luci-page,
+html.darkmode .adguardhome-luci-page,
+body[data-theme="dark"] .adguardhome-luci-page,
+body[data-theme-mode="dark"] .adguardhome-luci-page,
+body[data-color-scheme="dark"] .adguardhome-luci-page,
+body[data-bs-theme="dark"] .adguardhome-luci-page,
+body.dark .adguardhome-luci-page,
+body.dark-mode .adguardhome-luci-page,
+body.darkmode .adguardhome-luci-page {
+	--ag-card-bg: rgba(28, 28, 30, 0.96);
+	--ag-control-bg: #2c2c2e;
+	--ag-card-border: rgba(255, 255, 255, 0.1);
+	--ag-row-border: rgba(255, 255, 255, 0.09);
+	--ag-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 30px rgba(0, 0, 0, 0.35);
+	--ag-text-primary: #f5f5f7;
+	--ag-text-secondary: #a1a1a6;
+	--ag-text-tertiary: #8e8e93;
+	--ag-focus-ring: rgba(10, 132, 255, 0.24);
+	color-scheme: dark;
+}
+
+.adguardhome-luci-page > h2,
+.adguardhome-luci-page > .cbi-map-descr,
+.adguardhome-luci-page > .ag-status-section,
+.adguardhome-luci-page > .ag-section-essentials,
+.adguardhome-luci-page > .ag-section-maintenance,
+.adguardhome-luci-page > .ag-section-downloads,
+.adguardhome-luci-page > .cbi-page-actions {
+	grid-column: 1 / -1;
+}
+
+.adguardhome-luci-page > .ag-section-core-files {
+	grid-column: span 7;
+}
+
+.adguardhome-luci-page > .ag-section-rules-access {
+	grid-column: span 5;
 }
 
 .adguardhome-luci-page > h2 {
-	font-size: 1.5rem;
+	font-size: 24px;
+	line-height: 1.2;
 	font-weight: 700;
-	letter-spacing: -0.02em;
+	letter-spacing: 0;
 	color: var(--ag-text-primary);
-	margin: 0 0 6px 0;
+	margin: 0;
 	padding: 0;
 	border: none;
 }
 
-.adguardhome-luci-page .cbi-map-descr {
-	font-size: 0.875rem;
+.adguardhome-luci-page > .cbi-map-descr {
+	font-size: 13px;
 	color: var(--ag-text-secondary);
 	line-height: 1.45;
-	margin: 0 0 var(--ag-spacing) 0;
-	padding: 0 0 var(--ag-spacing) 0;
-	border-bottom: 1px solid var(--ag-card-border);
+	margin: -8px 0 2px;
+	padding: 0 0 14px;
+	border-bottom: 1px solid var(--ag-row-border);
 }
 
-/* Status strip: first cbi-section (after h2 + descr) */
-.adguardhome-luci-page > fieldset.cbi-section:first-of-type,
-.adguardhome-luci-page > div.cbi-section:first-of-type {
+.adguardhome-luci-page > .ag-status-section {
 	background: transparent !important;
 	box-shadow: none !important;
 	border: none !important;
-	margin-bottom: var(--ag-spacing) !important;
+	margin: 0 !important;
 	padding: 0 !important;
 }
 
-/* Main form card: second cbi-section */
-.adguardhome-luci-page > fieldset.cbi-section:nth-of-type(2),
-.adguardhome-luci-page > div.cbi-section:nth-of-type(2) {
+.adguardhome-luci-page > .ag-status-section > legend,
+.adguardhome-luci-page > .ag-status-section > h3 {
+	display: none;
+}
+
+.adguardhome-luci-page > .ag-settings-section {
+	min-width: 0;
 	background: var(--ag-card-bg);
 	border-radius: var(--ag-card-radius);
 	box-shadow: var(--ag-card-shadow);
 	border: 1px solid var(--ag-card-border);
-	margin-bottom: var(--ag-spacing);
+	margin: 0;
+	padding: 0;
 	overflow: hidden;
+	backdrop-filter: blur(18px);
+	-webkit-backdrop-filter: blur(18px);
 }
 
-.adguardhome-luci-page > fieldset.cbi-section:nth-of-type(2) .cbi-section-node,
-.adguardhome-luci-page > div.cbi-section:nth-of-type(2) .cbi-section-node {
-	padding: 4px 0;
+.adguardhome-luci-page > .ag-settings-section > legend,
+.adguardhome-luci-page > .ag-settings-section > h3 {
+	box-sizing: border-box;
+	display: block;
+	position: relative;
+	width: 100%;
+	margin: 0;
+	padding: 18px 22px 4px 40px;
+	border: 0;
+	color: var(--ag-text-primary);
+	background: transparent;
+	font-size: 17px;
+	line-height: 1.25;
+	font-weight: 700;
+	letter-spacing: 0;
 }
 
-/* Status bar layout */
+.adguardhome-luci-page > .ag-settings-section > legend::before,
+.adguardhome-luci-page > .ag-settings-section > h3::before {
+	content: "";
+	position: absolute;
+	left: 22px;
+	top: 23px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--ag-blue);
+	box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+}
+
+.adguardhome-luci-page > .ag-section-essentials > legend::before,
+.adguardhome-luci-page > .ag-section-essentials > h3::before {
+	background: var(--ag-green);
+	box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.14);
+}
+
+.adguardhome-luci-page > .ag-section-rules-access > legend::before,
+.adguardhome-luci-page > .ag-section-rules-access > h3::before {
+	background: var(--ag-orange);
+	box-shadow: 0 0 0 4px rgba(255, 149, 0, 0.15);
+}
+
+.adguardhome-luci-page > .ag-section-maintenance > legend::before,
+.adguardhome-luci-page > .ag-section-maintenance > h3::before {
+	background: var(--ag-gray);
+	box-shadow: 0 0 0 4px rgba(142, 142, 147, 0.15);
+}
+
+.adguardhome-luci-page > .ag-section-downloads > legend::before,
+.adguardhome-luci-page > .ag-section-downloads > h3::before {
+	background: var(--ag-purple);
+	box-shadow: 0 0 0 4px rgba(175, 82, 222, 0.14);
+}
+
+.adguardhome-luci-page > .ag-settings-section .cbi-section-descr {
+	margin: 0;
+	padding: 0 22px 14px 40px;
+	color: var(--ag-text-secondary);
+	font-size: 12px;
+	line-height: 1.45;
+	border-bottom: 1px solid var(--ag-row-border);
+}
+
+.adguardhome-luci-page > .ag-settings-section .cbi-section-node {
+	padding: 0;
+}
+
 .ag-status-bar {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 10px;
 	align-items: stretch;
-	gap: var(--ag-spacing);
-	flex-wrap: wrap;
 }
 
 .ag-status-item {
-	flex: 1 1 200px;
 	display: flex;
 	align-items: center;
-	min-height: 48px;
-	padding: 12px 16px;
-	background: rgba(0, 122, 255, 0.06);
-	border-radius: 10px;
+	min-height: 44px;
+	padding: 11px 14px;
+	background: var(--ag-card-bg);
+	border-radius: var(--ag-card-radius);
 	border: 1px solid var(--ag-card-border);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .ag-status-badges {
@@ -149,39 +441,45 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 	flex-wrap: wrap;
 	gap: 8px;
 	align-items: center;
+	justify-content: flex-end;
 }
 
 .badge {
 	display: inline-flex;
 	align-items: center;
-	padding: 4px 10px;
-	border-radius: 6px;
+	min-height: 24px;
+	padding: 3px 10px;
+	border-radius: 999px;
 	font-size: 12px;
-	font-weight: 500;
+	font-weight: 600;
+	line-height: 1;
+	white-space: nowrap;
 }
 
 .badge-success {
-	background: rgba(52, 199, 89, 0.15);
-	color: #34c759;
+	background: rgba(52, 199, 89, 0.14);
+	color: var(--ag-green);
 }
 
 .badge-danger {
-	background: rgba(255, 59, 48, 0.15);
-	color: #ff3b30;
+	background: rgba(255, 59, 48, 0.14);
+	color: var(--ag-red);
 }
 
 .badge-secondary {
 	background: rgba(142, 142, 147, 0.15);
-	color: #8e8e93;
+	color: var(--ag-gray);
 }
 
-/* Rows: label left, field right */
 .adguardhome-luci-page .cbi-value {
-	padding: 14px var(--ag-spacing-lg);
-	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-	display: flex;
-	align-items: flex-start;
-	gap: 16px;
+	box-sizing: border-box;
+	display: grid;
+	grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
+	gap: 18px;
+	align-items: start;
+	margin: 0;
+	padding: 14px 20px;
+	border-bottom: 1px solid var(--ag-row-border);
 }
 
 .adguardhome-luci-page .cbi-value:last-child {
@@ -189,15 +487,14 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 }
 
 .adguardhome-luci-page .cbi-value-title {
-	flex: 0 0 min(38%, 220px);
-	font-size: 14px;
-	font-weight: 500;
+	font-size: 13px;
+	line-height: 1.35;
+	font-weight: 600;
 	color: var(--ag-text-primary);
-	padding-top: 8px;
+	padding: 7px 0 0;
 }
 
 .adguardhome-luci-page .cbi-value-field {
-	flex: 1;
 	min-width: 0;
 }
 
@@ -206,12 +503,41 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 	font-size: 12px;
 	color: var(--ag-text-secondary);
 	line-height: 1.45;
+	max-width: 620px;
 }
 
-/* Open Web UI button (in description) */
+.adguardhome-luci-page > .ag-section-essentials .cbi-section-node {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	background: var(--ag-row-border);
+	gap: 1px;
+}
+
+.adguardhome-luci-page > .ag-section-essentials .cbi-value {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 132px;
+	padding: 16px 18px;
+	border: 0;
+	background: var(--ag-card-bg);
+}
+
+.adguardhome-luci-page > .ag-section-essentials .cbi-value-title,
+.adguardhome-luci-page > .ag-section-rules-access .cbi-value-title {
+	padding: 0;
+	color: var(--ag-text-secondary);
+}
+
+.adguardhome-luci-page > .ag-section-rules-access .cbi-value,
+.adguardhome-luci-page > .ag-section-downloads .cbi-value {
+	grid-template-columns: 1fr;
+	gap: 8px;
+}
+
 .adguardhome-luci-page .ag-web-open-wrap {
 	display: block;
-	margin-top: 10px;
+	margin-top: 8px;
 }
 
 .adguardhome-luci-page .ag-web-open-btn {
@@ -220,92 +546,109 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 8px;
-	padding: 10px 18px;
+	min-height: 34px;
+	max-width: 100%;
+	padding: 8px 14px;
 	border: none;
-	border-radius: 10px;
-	font-size: 14px;
+	border-radius: var(--ag-card-radius);
+	font-size: 13px;
 	font-weight: 600;
+	line-height: 1.25;
 	cursor: pointer;
 	color: #fff;
-	background: var(--ag-header-bg-blue);
-	box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28);
+	background: var(--ag-blue);
+	box-shadow: 0 6px 16px rgba(0, 122, 255, 0.22);
 	transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+	white-space: normal;
+	text-align: center;
 }
 
 .adguardhome-luci-page .ag-web-open-btn:hover {
 	opacity: 0.95;
-	box-shadow: 0 6px 18px rgba(0, 122, 255, 0.35);
+	box-shadow: 0 8px 20px rgba(0, 122, 255, 0.28);
 }
 
 .adguardhome-luci-page .ag-web-open-btn:active {
 	transform: scale(0.98);
 }
 
-/* Inputs */
 .adguardhome-luci-page .cbi-input-text,
 .adguardhome-luci-page .cbi-input-number,
-.adguardhome-luci-page .cbi-input-password {
+.adguardhome-luci-page .cbi-input-password,
+.adguardhome-luci-page .cbi-input-select,
+.adguardhome-luci-page .cbi-select,
+.adguardhome-luci-page select,
+.adguardhome-luci-page .ag-chpass-input {
+	box-sizing: border-box;
 	width: 100%;
 	max-width: 420px;
-	padding: 10px 14px;
-	border: 1px solid rgba(0, 0, 0, 0.1);
-	border-radius: 8px;
+	min-height: 36px;
+	padding: 8px 12px;
+	border: 1px solid var(--ag-card-border);
+	border-radius: var(--ag-card-radius);
 	font-size: 14px;
+	line-height: 1.4;
+	color: var(--ag-text-primary);
+	background: var(--ag-control-bg);
 	transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .adguardhome-luci-page .cbi-input-text:focus,
 .adguardhome-luci-page .cbi-input-number:focus,
-.adguardhome-luci-page .cbi-input-password:focus {
+.adguardhome-luci-page .cbi-input-password:focus,
+.adguardhome-luci-page .cbi-input-select:focus,
+.adguardhome-luci-page .cbi-select:focus,
+.adguardhome-luci-page select:focus,
+.adguardhome-luci-page .ag-chpass-input:focus {
 	outline: none;
-	border-color: #007aff;
-	box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+	border-color: var(--ag-blue);
+	box-shadow: 0 0 0 3px var(--ag-focus-ring);
 }
 
-.adguardhome-luci-page .cbi-select {
+.adguardhome-luci-page .cbi-input-textarea,
+.adguardhome-luci-page textarea {
+	box-sizing: border-box;
 	width: 100%;
-	max-width: 420px;
-	padding: 10px 14px;
-	border: 1px solid rgba(0, 0, 0, 0.1);
-	border-radius: 8px;
-	font-size: 14px;
-	background: var(--ag-card-bg);
-}
-
-.adguardhome-luci-page .cbi-input-textarea {
-	width: 100%;
-	border: 1px solid rgba(0, 0, 0, 0.1);
-	border-radius: 8px;
+	min-height: 132px;
+	padding: 12px;
+	border: 1px solid var(--ag-card-border);
+	border-radius: var(--ag-card-radius);
 	font-size: 13px;
 	font-family: "SF Mono", Monaco, "Courier New", monospace;
+	line-height: 1.55;
+	color: var(--ag-text-primary);
+	background: var(--ag-control-bg);
 }
 
 .adguardhome-luci-page .cbi-input-checkbox,
-.adguardhome-luci-page .cbi-input-radio {
-	width: 18px;
-	height: 18px;
-	accent-color: #007aff;
+.adguardhome-luci-page .cbi-input-radio,
+.adguardhome-luci-page input[type="checkbox"],
+.adguardhome-luci-page input[type="radio"] {
+	width: 16px;
+	height: 16px;
+	margin: 0 6px 0 0;
+	accent-color: var(--ag-blue);
 }
 
-/* Buttons */
 .adguardhome-luci-page .cbi-button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	padding: 10px 18px;
+	min-height: 34px;
+	padding: 8px 14px;
 	border: none;
-	border-radius: 8px;
-	font-size: 14px;
-	font-weight: 500;
+	border-radius: var(--ag-card-radius);
+	font-size: 13px;
+	font-weight: 600;
 	cursor: pointer;
-	transition: opacity 0.2s ease;
+	transition: opacity 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
 
 .adguardhome-luci-page .cbi-button-apply {
-	background: var(--ag-header-bg-green);
+	background: var(--ag-green);
 	color: #fff;
+	box-shadow: 0 6px 16px rgba(52, 199, 89, 0.2);
 }
 
 .adguardhome-luci-page .cbi-button-apply:hover {
@@ -313,26 +656,29 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 }
 
 .adguardhome-luci-page .cbi-button-reset {
-	background: rgba(0, 0, 0, 0.05);
+	background: var(--ag-control-bg);
 	color: var(--ag-text-primary);
 }
 
 .adguardhome-luci-page .cbi-button-action {
-	background: var(--ag-header-bg-blue);
+	background: var(--ag-blue);
 	color: #fff;
+	box-shadow: 0 6px 16px rgba(0, 122, 255, 0.2);
 }
 
-/* Footer */
-.adguardhome-luci-page .cbi-section-actions {
-	padding: var(--ag-spacing);
+.adguardhome-luci-page .cbi-button:active {
+	transform: scale(0.98);
+}
+
+.adguardhome-luci-page .cbi-section-actions,
+.adguardhome-luci-page .cbi-page-actions {
+	padding: 4px 0 0;
 	display: flex;
-	gap: 8px;
+	gap: 10px;
 	flex-wrap: wrap;
-	border-top: 1px solid var(--ag-card-border);
-	background: rgba(0, 0, 0, 0.02);
+	justify-content: flex-end;
 }
 
-/* MultiValue */
 .adguardhome-luci-page .cbi-multivalue {
 	display: flex;
 	flex-wrap: wrap;
@@ -343,15 +689,21 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 .adguardhome-luci-page .cbi-radio {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 6px 12px;
-	background: rgba(0, 0, 0, 0.03);
-	border-radius: 6px;
+	min-height: 30px;
+	padding: 5px 10px;
+	background: var(--ag-control-bg);
+	border-radius: var(--ag-card-radius);
 	font-size: 13px;
+	color: var(--ag-text-primary);
+}
+
+.adguardhome-luci-page .cbi-value-field label {
+	color: var(--ag-text-primary);
+	line-height: 1.7;
 }
 
 .status-running {
-	color: #34c759;
+	color: var(--ag-green);
 	font-weight: 600;
 	display: flex;
 	align-items: center;
@@ -359,7 +711,7 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 }
 
 .status-stopped {
-	color: #ff3b30;
+	color: var(--ag-red);
 	font-weight: 600;
 	display: flex;
 	align-items: center;
@@ -376,21 +728,1294 @@ XHR.poll(3, '<%=url([[admin]], [[services]], [[AdGuardHome]], [[status]])%>', nu
 	font-size: 12px;
 }
 
+@media (max-width: 980px) {
+	.adguardhome-luci-page > .ag-section-core-files,
+	.adguardhome-luci-page > .ag-section-rules-access {
+		grid-column: 1 / -1;
+	}
+}
+
 @media (max-width: 768px) {
-	.adguardhome-luci-page .cbi-value {
-		flex-direction: column;
-		align-items: stretch;
+	.adguardhome-luci-page {
+		max-width: none;
+		grid-template-columns: 1fr;
+		gap: 12px;
+	}
+
+	.ag-status-bar,
+	.adguardhome-luci-page > .ag-section-essentials .cbi-section-node {
+		grid-template-columns: 1fr;
+	}
+
+	.ag-status-badges {
+		justify-content: flex-start;
+	}
+
+	.adguardhome-luci-page > .ag-settings-section > legend,
+	.adguardhome-luci-page > .ag-settings-section > h3 {
+		padding: 16px 16px 4px 34px;
+	}
+
+	.adguardhome-luci-page > .ag-settings-section > legend::before,
+	.adguardhome-luci-page > .ag-settings-section > h3::before {
+		left: 16px;
+		top: 21px;
+	}
+
+	.adguardhome-luci-page > .ag-settings-section .cbi-section-descr {
+		padding: 0 16px 12px 34px;
+	}
+
+	.adguardhome-luci-page .cbi-value,
+	.adguardhome-luci-page > .ag-section-essentials .cbi-value {
+		grid-template-columns: 1fr;
+		gap: 8px;
+		min-height: 0;
+		padding: 14px 16px;
 	}
 
 	.adguardhome-luci-page .cbi-value-title {
-		flex: none;
 		padding-top: 0;
 	}
 
 	.adguardhome-luci-page .cbi-input-text,
 	.adguardhome-luci-page .cbi-input-number,
-	.adguardhome-luci-page .cbi-select {
+	.adguardhome-luci-page .cbi-input-password,
+	.adguardhome-luci-page .cbi-input-select,
+	.adguardhome-luci-page .cbi-select,
+	.adguardhome-luci-page select,
+	.adguardhome-luci-page textarea,
+	.adguardhome-luci-page .ag-chpass-input {
 		max-width: 100%;
+	}
+}
+
+/* Full-page layout ownership for luci-theme-apple service-page overrides. */
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page {
+	display: block !important;
+	width: min(100%, 1120px) !important;
+	max-width: 1120px !important;
+	margin: 0 auto !important;
+	padding: 0 0 24px !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	border: 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > h2 {
+	margin: 0 0 6px !important;
+	padding: 0 !important;
+	font-size: 24px !important;
+	line-height: 1.18 !important;
+	letter-spacing: 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .cbi-map-descr {
+	margin: 0 0 14px !important;
+	padding: 0 0 14px !important;
+	border-bottom: 1px solid var(--ag-row-border) !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 13px !important;
+	line-height: 1.45 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-status-section,
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section {
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 0 16px !important;
+	box-sizing: border-box !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-status-section {
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section {
+	padding: 0 !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: var(--ag-card-radius) !important;
+	background: var(--ag-card-bg) !important;
+	box-shadow: var(--ag-card-shadow) !important;
+	overflow: hidden !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section > :is(h3, legend) {
+	margin: 0 !important;
+	padding: 18px 22px 4px 42px !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 17px !important;
+	font-weight: 720 !important;
+	line-height: 1.25 !important;
+	text-align: left !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section > .cbi-section-descr {
+	margin: 0 !important;
+	padding: 0 22px 15px 42px !important;
+	border-bottom: 1px solid var(--ag-row-border) !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 12px !important;
+	line-height: 1.45 !important;
+	text-align: left !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section > .cbi-section-node {
+	display: grid !important;
+	grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+	gap: 1px !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: var(--ag-row-border) !important;
+	box-sizing: border-box !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value {
+	grid-column: span 6 !important;
+	display: flex !important;
+	flex-direction: column !important;
+	align-items: stretch !important;
+	justify-content: flex-start !important;
+	gap: 9px !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-width: 0 !important;
+	min-height: 116px !important;
+	margin: 0 !important;
+	padding: 16px 18px !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: var(--ag-card-bg) !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-section-essentials .cbi-value {
+	grid-column: span 4 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-restart,
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab,
+	#cbi-AdGuardHome-AdGuardHome-downloadlinks
+) {
+	grid-column: 1 / -1 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-gfwdel,
+	#cbi-AdGuardHome-AdGuardHome-gfwadd,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) {
+	min-height: 96px !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value-title {
+	display: block !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 13px !important;
+	font-weight: 680 !important;
+	line-height: 1.35 !important;
+	text-align: left !important;
+	white-space: normal !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value-field {
+	grid-column: auto !important;
+	display: flex !important;
+	flex: 1 1 auto !important;
+	flex-direction: column !important;
+	align-items: flex-start !important;
+	justify-content: flex-start !important;
+	align-content: stretch !important;
+	flex-wrap: nowrap !important;
+	gap: 8px !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	text-align: left !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value-field > br {
+	display: none !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value-description,
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value-field > :is(.cbi-value-description, .cbi-section-descr, small, .help-block) {
+	display: block !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 12px !important;
+	line-height: 1.45 !important;
+	text-align: left !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value-field > div:not(.cbi-value-description):not(.cbi-section-descr):not(.help-block):not(.ag-update-wrap):not(.ag-chpass-wrap) {
+	display: block !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	text-align: left !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(
+	.cbi-input-text,
+	.cbi-input-number,
+	.cbi-input-password,
+	.cbi-input-select,
+	.cbi-select,
+	select,
+	textarea,
+	.cbi-dropdown,
+	.ag-chpass-input
+) {
+	width: 100% !important;
+	max-width: 100% !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	box-sizing: border-box !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page textarea {
+	min-height: 148px !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.ag-update-wrap, .ag-chpass-wrap) {
+	display: flex !important;
+	flex-direction: column !important;
+	align-items: stretch !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	gap: 10px !important;
+	margin: 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.ag-update-btns, .ag-chpass-row) {
+	display: flex !important;
+	flex-wrap: wrap !important;
+	justify-content: flex-start !important;
+	align-items: center !important;
+	gap: 8px !important;
+	width: 100% !important;
+	margin: 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.cbi-button, .ag-btn, .ag-web-open-btn) {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	width: auto !important;
+	max-width: 100% !important;
+	min-height: 34px !important;
+	margin: 0 !important;
+	text-align: center !important;
+	white-space: normal !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .ag-web-open-wrap {
+	display: flex !important;
+	justify-content: flex-start !important;
+	width: 100% !important;
+	margin: 2px 0 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.cbi-multivalue, .cbi-value-field:has(> .cbi-checkbox), .cbi-value-field:has(> .cbi-radio)) {
+	display: grid !important;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+	gap: 8px !important;
+	align-items: stretch !important;
+	justify-items: stretch !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	text-align: left !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.cbi-checkbox, .cbi-radio) {
+	display: flex !important;
+	flex-direction: row !important;
+	flex-wrap: nowrap !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	gap: 10px !important;
+	width: 100% !important;
+	min-height: 42px !important;
+	margin: 0 !important;
+	padding: 8px 12px !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: var(--ag-card-radius) !important;
+	background: var(--ag-control-bg) !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 13px !important;
+	line-height: 1.3 !important;
+	box-sizing: border-box !important;
+	text-align: left !important;
+	white-space: normal !important;
+	word-break: keep-all !important;
+	overflow-wrap: normal !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.cbi-input-checkbox, .cbi-input-radio, input[type="checkbox"], input[type="radio"]) {
+	flex: 0 0 auto !important;
+	width: 16px !important;
+	height: 16px !important;
+	margin: 0 7px 0 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.cbi-checkbox, .cbi-radio) > :is(.cbi-input-checkbox, .cbi-input-radio, input[type="checkbox"], input[type="radio"]) {
+	justify-self: start !important;
+	align-self: center !important;
+	margin: 0 !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) .cbi-value-field {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) :is(.cbi-checkbox, .cbi-radio) {
+	width: auto !important;
+	min-width: 98px !important;
+}
+
+body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-page-actions {
+	display: flex !important;
+	justify-content: flex-end !important;
+	gap: 10px !important;
+	width: 100% !important;
+	margin: 4px 0 0 !important;
+	padding: 0 !important;
+}
+
+@media (max-width: 920px) {
+	body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value,
+	body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-section-essentials .cbi-value {
+		grid-column: 1 / -1 !important;
+		min-height: 0 !important;
+	}
+}
+
+@media (max-width: 640px) {
+	body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section > :is(h3, legend) {
+		padding: 16px 16px 4px 34px !important;
+	}
+
+	body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page > .ag-settings-section > .cbi-section-descr {
+		padding: 0 16px 13px 34px !important;
+	}
+
+	body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page .cbi-value {
+		padding: 14px 16px !important;
+	}
+
+	body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent .adguardhome-luci-page :is(.cbi-multivalue, .cbi-value-field:has(> .cbi-checkbox), .cbi-value-field:has(> .cbi-radio)) {
+		grid-template-columns: 1fr !important;
+	}
+}
+
+/* Final list layout: one stable settings system, no card grid. */
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page {
+	display: block !important;
+	width: min(100%, 1120px) !important;
+	max-width: 1120px !important;
+	margin: 0 auto !important;
+	padding: 0 0 24px !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section {
+	display: block !important;
+	width: 100% !important;
+	margin: 0 0 18px !important;
+	padding: 0 !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: 18px !important;
+	background: var(--ag-card-bg) !important;
+	box-shadow: var(--ag-card-shadow) !important;
+	overflow: hidden !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section > .cbi-section-node {
+	display: block !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-section-essentials .cbi-value {
+	display: grid !important;
+	grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) !important;
+	gap: 8px 24px !important;
+	align-items: start !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-height: 0 !important;
+	margin: 0 !important;
+	padding: 16px 22px !important;
+	border: 0 !important;
+	border-bottom: 1px solid var(--ag-row-border) !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value:last-child {
+	border-bottom: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-title {
+	grid-column: 1 !important;
+	align-self: start !important;
+	width: auto !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 7px 0 0 !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 14px !important;
+	font-weight: 680 !important;
+	line-height: 1.35 !important;
+	text-align: left !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-field {
+	grid-column: 2 !important;
+	display: flex !important;
+	flex-direction: row !important;
+	flex-wrap: wrap !important;
+	align-items: flex-start !important;
+	justify-content: flex-start !important;
+	align-content: flex-start !important;
+	gap: 8px 10px !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	text-align: left !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-field > br {
+	display: none !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value-description,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value-field > :is(.cbi-value-description, .cbi-section-descr, small, .help-block) {
+	flex: 1 1 100% !important;
+	grid-column: 2 !important;
+	width: 100% !important;
+	max-width: 760px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 12px !important;
+	line-height: 1.45 !important;
+	text-align: left !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value-field > div:not(.cbi-value-description):not(.cbi-section-descr):not(.help-block):not(.ag-update-wrap):not(.ag-chpass-wrap):not(.cbi-checkbox):not(.cbi-radio) {
+	display: block !important;
+	flex: 1 1 min(100%, 520px) !important;
+	width: min(100%, 520px) !important;
+	max-width: 520px !important;
+	min-width: min(100%, 220px) !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	.cbi-input-text,
+	.cbi-input-number,
+	.cbi-input-password,
+	.cbi-input-select,
+	.cbi-select,
+	select,
+	.cbi-dropdown,
+	.ag-chpass-input
+) {
+	width: 100% !important;
+	max-width: 520px !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(textarea, .cbi-input-textarea) {
+	width: 100% !important;
+	max-width: 100% !important;
+	min-height: 132px !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(.ag-update-wrap, .ag-chpass-wrap) {
+	display: flex !important;
+	flex: 1 1 100% !important;
+	flex-direction: column !important;
+	align-items: flex-start !important;
+	width: 100% !important;
+	max-width: 760px !important;
+	gap: 10px !important;
+	margin: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(.ag-update-btns, .ag-chpass-row) {
+	display: flex !important;
+	flex-wrap: wrap !important;
+	justify-content: flex-start !important;
+	align-items: center !important;
+	gap: 8px !important;
+	width: 100% !important;
+	margin: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(.ag-btn, .ag-web-open-btn, .cbi-button) {
+	width: auto !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	white-space: nowrap !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-field > :is(.btn, .cbi-button, button, input[type="submit"], input[type="button"]) {
+	flex: 0 0 auto !important;
+	inline-size: auto !important;
+	width: auto !important;
+	min-width: 132px !important;
+	max-width: min(100%, 240px) !important;
+	align-self: flex-start !important;
+	padding-inline: 18px !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .ag-web-open-wrap {
+	display: flex !important;
+	flex: 1 1 100% !important;
+	justify-content: flex-start !important;
+	width: 100% !important;
+	margin: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) > .cbi-value-field {
+	display: grid !important;
+	grid-template-columns: minmax(0, 1fr) !important;
+	gap: 8px !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) > .cbi-value-field > div {
+	display: grid !important;
+	flex: 1 1 100% !important;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+	gap: 8px !important;
+	width: 100% !important;
+	max-width: 760px !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(.cbi-multivalue, .cbi-value-field > .cbi-multivalue) {
+	display: grid !important;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+	gap: 8px !important;
+	width: 100% !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(.cbi-checkbox, .cbi-radio) {
+	display: flex !important;
+	flex-direction: row !important;
+	flex-wrap: nowrap !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	gap: 10px !important;
+	width: 100% !important;
+	min-height: 42px !important;
+	margin: 0 !important;
+	padding: 8px 12px !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: 8px !important;
+	background: var(--ag-control-bg) !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 13px !important;
+	line-height: 1.3 !important;
+	box-sizing: border-box !important;
+	text-align: left !important;
+	white-space: normal !important;
+	word-break: keep-all !important;
+	overflow-wrap: normal !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(.cbi-checkbox, .cbi-radio) > :is(.cbi-input-checkbox, .cbi-input-radio, input[type="checkbox"], input[type="radio"]) {
+	justify-self: start !important;
+	align-self: center !important;
+	margin: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) > .cbi-value-field {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) :is(.cbi-checkbox, .cbi-radio) {
+	width: auto !important;
+	min-width: 104px !important;
+}
+
+@media (max-width: 760px) {
+	html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value,
+	html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page > .ag-section-essentials .cbi-value {
+		grid-template-columns: 1fr !important;
+		gap: 8px !important;
+		padding: 14px 16px !important;
+	}
+
+	html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > :is(.cbi-value-title, .cbi-value-field, .cbi-value-description) {
+		grid-column: 1 !important;
+	}
+}
+
+/* Theme-neutral layout: keep the settings page stable outside luci-theme-apple. */
+html body #maincontent form .cbi-map.adguardhome-luci-page {
+	display: block !important;
+	width: min(100%, 1120px) !important;
+	max-width: 1120px !important;
+	margin: 0 auto !important;
+	padding: 0 0 24px !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	overflow: visible !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > h2 {
+	display: block !important;
+	width: 100% !important;
+	margin: 0 0 6px !important;
+	padding: 0 !important;
+	border: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 24px !important;
+	font-weight: 700 !important;
+	line-height: 1.2 !important;
+	letter-spacing: 0 !important;
+	text-align: left !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .cbi-map-descr {
+	display: block !important;
+	width: 100% !important;
+	margin: 0 0 14px !important;
+	padding: 0 0 14px !important;
+	border: 0 !important;
+	border-bottom: 1px solid var(--ag-row-border) !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 13px !important;
+	line-height: 1.45 !important;
+	text-align: left !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-status-bar {
+	display: grid !important;
+	grid-template-columns: minmax(0, 1fr) auto !important;
+	gap: 10px !important;
+	align-items: stretch !important;
+	width: 100% !important;
+	margin: 0 0 16px !important;
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-status-bar .ag-status-item {
+	display: flex !important;
+	align-items: center !important;
+	min-height: 44px !important;
+	margin: 0 !important;
+	padding: 11px 14px !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: var(--ag-card-radius) !important;
+	background: var(--ag-card-bg) !important;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section {
+	display: block !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 0 18px !important;
+	padding: 0 !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: 18px !important;
+	background: var(--ag-card-bg) !important;
+	box-shadow: var(--ag-card-shadow) !important;
+	overflow: hidden !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section > :is(h3, legend) {
+	display: block !important;
+	position: relative !important;
+	width: 100% !important;
+	margin: 0 !important;
+	padding: 18px 22px 4px 42px !important;
+	border: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 17px !important;
+	font-weight: 700 !important;
+	line-height: 1.25 !important;
+	text-align: left !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section > .cbi-section-descr {
+	display: block !important;
+	width: 100% !important;
+	margin: 0 !important;
+	padding: 0 22px 15px 42px !important;
+	border: 0 !important;
+	border-bottom: 1px solid var(--ag-row-border) !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 12px !important;
+	line-height: 1.45 !important;
+	text-align: left !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section > .cbi-section-node {
+	display: block !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value {
+	display: grid !important;
+	grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) !important;
+	gap: 8px 24px !important;
+	align-items: start !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-height: 0 !important;
+	margin: 0 !important;
+	padding: 16px 22px !important;
+	border: 0 !important;
+	border-bottom: 1px solid var(--ag-row-border) !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+	text-align: left !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value:last-child {
+	border-bottom: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-title {
+	grid-column: 1 !important;
+	align-self: start !important;
+	width: auto !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	padding: 7px 0 0 !important;
+	float: none !important;
+	clear: none !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 14px !important;
+	font-weight: 680 !important;
+	line-height: 1.35 !important;
+	text-align: left !important;
+	white-space: normal !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-field {
+	grid-column: 2 !important;
+	display: flex !important;
+	flex: 1 1 auto !important;
+	flex-direction: row !important;
+	flex-wrap: wrap !important;
+	align-items: flex-start !important;
+	justify-content: flex-start !important;
+	align-content: flex-start !important;
+	gap: 8px 10px !important;
+	width: 100% !important;
+	max-width: 100% !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	float: none !important;
+	clear: none !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	text-align: left !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-field > br {
+	display: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value-description,
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value-field > :is(.cbi-value-description, .cbi-section-descr, small, .help-block) {
+	flex: 1 1 100% !important;
+	grid-column: 2 !important;
+	width: 100% !important;
+	max-width: 760px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	color: var(--ag-text-secondary) !important;
+	font-size: 12px !important;
+	line-height: 1.45 !important;
+	text-align: left !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value-field > div:not(.cbi-value-description):not(.cbi-section-descr):not(.help-block):not(.ag-update-wrap):not(.ag-chpass-wrap):not(.cbi-checkbox):not(.cbi-radio) {
+	display: block !important;
+	flex: 1 1 min(100%, 520px) !important;
+	width: min(100%, 520px) !important;
+	max-width: 520px !important;
+	min-width: min(100%, 220px) !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	text-align: left !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	.cbi-input-text,
+	.cbi-input-number,
+	.cbi-input-password,
+	.cbi-input-select,
+	.cbi-select,
+	select,
+	.cbi-dropdown,
+	.ag-chpass-input
+) {
+	width: 100% !important;
+	max-width: 520px !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	box-sizing: border-box !important;
+	text-align: left !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(textarea, .cbi-input-textarea) {
+	width: 100% !important;
+	max-width: 100% !important;
+	min-height: 132px !important;
+	box-sizing: border-box !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(.ag-update-wrap, .ag-chpass-wrap) {
+	display: flex !important;
+	flex: 1 1 100% !important;
+	flex-direction: column !important;
+	align-items: flex-start !important;
+	width: 100% !important;
+	max-width: 760px !important;
+	gap: 10px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(.ag-update-btns, .ag-chpass-row) {
+	display: flex !important;
+	flex-wrap: wrap !important;
+	justify-content: flex-start !important;
+	align-items: center !important;
+	gap: 8px !important;
+	width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(.ag-btn, .ag-web-open-btn, .cbi-button) {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	width: auto !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+	text-align: center !important;
+	white-space: nowrap !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > .cbi-value-field > :is(.btn, .cbi-button, button, input[type="submit"], input[type="button"]) {
+	flex: 0 0 auto !important;
+	inline-size: auto !important;
+	width: auto !important;
+	min-width: 132px !important;
+	max-width: min(100%, 240px) !important;
+	align-self: flex-start !important;
+	padding-inline: 18px !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .ag-web-open-wrap {
+	display: flex !important;
+	flex: 1 1 100% !important;
+	justify-content: flex-start !important;
+	width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) > .cbi-value-field {
+	display: grid !important;
+	grid-template-columns: minmax(0, 1fr) !important;
+	gap: 8px !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) > .cbi-value-field > div {
+	display: grid !important;
+	flex: 1 1 100% !important;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+	gap: 8px !important;
+	width: 100% !important;
+	max-width: 760px !important;
+	min-width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(.cbi-multivalue, .cbi-value-field > .cbi-multivalue) {
+	display: grid !important;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+	gap: 8px !important;
+	width: 100% !important;
+	max-width: 760px !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(.cbi-checkbox, .cbi-radio) {
+	display: flex !important;
+	flex-direction: row !important;
+	flex-wrap: nowrap !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	gap: 10px !important;
+	width: 100% !important;
+	min-height: 42px !important;
+	margin: 0 !important;
+	padding: 8px 12px !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: 8px !important;
+	background: var(--ag-control-bg) !important;
+	color: var(--ag-text-primary) !important;
+	font-size: 13px !important;
+	line-height: 1.3 !important;
+	box-sizing: border-box !important;
+	text-align: left !important;
+	white-space: normal !important;
+	word-break: keep-all !important;
+	overflow-wrap: normal !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(.cbi-checkbox, .cbi-radio) > :is(.cbi-input-checkbox, .cbi-input-radio, input[type="checkbox"], input[type="radio"]) {
+	justify-self: start !important;
+	align-self: center !important;
+	margin: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) > .cbi-value-field {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+	gap: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) :is(.cbi-checkbox, .cbi-radio) {
+	width: auto !important;
+	min-width: 0 !important;
+	min-height: 16px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) > .cbi-value-field > div:has(input[type="checkbox"], input[type="radio"]) {
+	display: inline-flex !important;
+	flex: 0 0 auto !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	width: auto !important;
+	min-width: 0 !important;
+	max-width: none !important;
+	min-height: 16px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) :is(.cbi-input-checkbox, .cbi-input-radio, input[type="checkbox"], input[type="radio"]) {
+	margin: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) > .cbi-value-field {
+	gap: 0 !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) :is(.cbi-checkbox, .cbi-radio) {
+	width: auto !important;
+	min-width: 0 !important;
+	min-height: 16px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) > .cbi-value-field > div:has(input[type="checkbox"], input[type="radio"]) {
+	display: inline-flex !important;
+	flex: 0 0 auto !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	width: auto !important;
+	min-width: 0 !important;
+	max-width: none !important;
+	min-height: 16px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-enabled,
+	#cbi-AdGuardHome-AdGuardHome-verbose,
+	#cbi-AdGuardHome-AdGuardHome-waitonboot
+) :is(.cbi-input-checkbox, .cbi-input-radio, input[type="checkbox"], input[type="radio"]) {
+	margin: 0 !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) > .cbi-value-field :is(.cbi-checkbox, .cbi-radio),
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) > .cbi-value-field :is(.cbi-checkbox, .cbi-radio) {
+	display: flex !important;
+	flex-direction: row !important;
+	flex-wrap: nowrap !important;
+	align-items: center !important;
+	justify-content: flex-start !important;
+	gap: 10px !important;
+	width: 100% !important;
+	min-width: 0 !important;
+	min-height: 42px !important;
+	margin: 0 !important;
+	padding: 8px 12px !important;
+	border: 1px solid var(--ag-card-border) !important;
+	border-radius: 8px !important;
+	background: var(--ag-control-bg) !important;
+	color: var(--ag-text-primary) !important;
+	box-sizing: border-box !important;
+	line-height: 1.35 !important;
+	text-align: left !important;
+	white-space: normal !important;
+	word-break: keep-all !important;
+	overflow-wrap: normal !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab > .cbi-value-field,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab > .cbi-value-field {
+	display: grid !important;
+	grid-template-columns: minmax(0, 1fr) !important;
+	gap: 8px !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab > .cbi-value-field > div,
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab > .cbi-value-field > div {
+	width: 100% !important;
+	max-width: none !important;
+	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab :is(.cbi-value-description, .cbi-section-descr, small, .help-block),
+html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab :is(.cbi-value-description, .cbi-section-descr, small, .help-block) {
+	grid-column: 1 !important;
+	width: 100% !important;
+	max-width: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) :is(.cbi-checkbox, .cbi-radio) br {
+	display: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) :is(.cbi-checkbox, .cbi-radio) > label:empty {
+	display: none !important;
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page :is(
+	#cbi-AdGuardHome-AdGuardHome-upprotect,
+	#cbi-AdGuardHome-AdGuardHome-backupfile,
+	#cbi-AdGuardHome-AdGuardHome-crontab
+) :is(.cbi-checkbox, .cbi-radio) :is(label, span) {
+	min-width: 0 !important;
+	max-width: 100% !important;
+	color: var(--ag-text-primary) !important;
+	line-height: 1.35 !important;
+	white-space: normal !important;
+	word-break: keep-all !important;
+	overflow-wrap: normal !important;
+}
+
+@media (min-width: 900px) {
+	html body #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab :is(.cbi-checkbox, .cbi-radio) > span,
+	html body.apple-theme-v2[data-page="admin-services-AdGuardHome-base"] #maincontent form .cbi-map.adguardhome-luci-page #cbi-AdGuardHome-AdGuardHome-crontab :is(.cbi-checkbox, .cbi-radio) > span {
+		white-space: nowrap !important;
+	}
+}
+
+html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-page-actions {
+	display: flex !important;
+	justify-content: flex-end !important;
+	gap: 10px !important;
+	width: 100% !important;
+	margin: 18px 0 0 !important;
+	padding: 0 !important;
+}
+
+@media (max-width: 760px) {
+	html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-status-bar,
+	html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value {
+		grid-template-columns: 1fr !important;
+		gap: 8px !important;
+	}
+
+	html body #maincontent form .cbi-map.adguardhome-luci-page > .ag-settings-section .cbi-value {
+		padding: 14px 16px !important;
+	}
+
+	html body #maincontent form .cbi-map.adguardhome-luci-page .cbi-value > :is(.cbi-value-title, .cbi-value-field, .cbi-value-description) {
+		grid-column: 1 !important;
 	}
 }
 </style>

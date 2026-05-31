@@ -28,14 +28,14 @@ check_wgetcurl(){
 	which curl && downloader="curl -L -k --retry 2 --connect-timeout 20 -o" && return
 	which wget-ssl && downloader="wget-ssl --no-check-certificate -t 2 -T 20 -O" && return
 	which wget && downloader="wget --no-check-certificate -t 2 -T 20 -O" && return
-	if [ "$PKG_MANAGER" == "apk" ]; then
+	if [ "$PKG_MANAGER" = "apk" ]; then
 		[ -z "$1" ] && (echo "Installing curl..." && apk add curl 2>/dev/null) && check_wgetcurl 1 && return
-		[ "$1" == "1" ] && (echo "Installing wget..." && apk add wget 2>/dev/null) && check_wgetcurl 2 && return
+		[ "$1" = "1" ] && (echo "Installing wget..." && apk add wget 2>/dev/null) && check_wgetcurl 2 && return
 		echo "Error: Neither curl nor wget available, and installation failed." && EXIT 1
 	else
 		[ -z "$1" ] && opkg update || (echo "Error: opkg update failed" && EXIT 1)
 		[ -z "$1" ] && (opkg remove wget wget-nossl --force-depends 2>/dev/null ; opkg install wget ; check_wgetcurl 1 ;return)
-		[ "$1" == "1" ] && (opkg install curl ; check_wgetcurl 2 ; return)
+		[ "$1" = "1" ] && (opkg install curl ; check_wgetcurl 2 ; return)
 		echo "Error: Neither curl nor wget available, and opkg installation failed." && EXIT 1
 	fi
 }
@@ -46,7 +46,7 @@ check_latest_version(){
 		echo -e "\nFailed to check latest version, please try again later."  && EXIT 1
 	fi
 	now_ver="$($binpath -c /dev/null --check-config 2>&1| grep -m 1 -E 'v[0-9.]+' -o)"
-	if [ "${latest_ver}"x != "${now_ver}"x ] || [ "$1" == "force" ]; then
+	if [ "${latest_ver}"x != "${now_ver}"x ] || [ "$1" = "force" ]; then
 		echo -e "Local version: ${now_ver}., cloud version: ${latest_ver}." 
 		doupdate_core
 	else
@@ -72,7 +72,7 @@ check_latest_version(){
 	fi
 }
 doupx(){
-	if [ "$PKG_MANAGER" == "apk" ]; then
+	if [ "$PKG_MANAGER" = "apk" ]; then
 		Archt="$(apk info kernel 2>/dev/null | grep Architecture || uname -m)"
 	else
 		Archt="$(opkg info kernel | grep Architecture | awk -F "[ _]" '{print($2)}')"
@@ -86,7 +86,7 @@ doupx(){
 	echo -e "i686 use $Arch may have bug" 
 	;;
 	"x86")
-	Arch="amd64"
+	Arch="i386"
 	;;
 	"x86_64")
 	Arch="amd64"
@@ -96,7 +96,6 @@ doupx(){
 	;;
 	"mips64el")
 	Arch="mips64el"
-	Arch="mipsel"
 	echo -e "mips64el use $Arch may have bug" 
 	;;
 	"mips")
@@ -104,7 +103,6 @@ doupx(){
 	;;
 	"mips64")
 	Arch="mips64"
-	Arch="mips"
 	echo -e "mips64 use $Arch may have bug" 
 	;;
 	"arm")
@@ -131,7 +129,7 @@ doupx(){
 	$downloader /tmp/upx-${upx_latest_ver}-${Arch}_linux.tar.xz "https://github.com/upx/upx/releases/download/v${upx_latest_ver}/upx-${upx_latest_ver}-${Arch}_linux.tar.xz" 2>&1
 	#tar xvJf
 	which xz || {
-		if [ "$PKG_MANAGER" == "apk" ]; then
+		if [ "$PKG_MANAGER" = "apk" ]; then
 			apk add xz 2>/dev/null || (echo "xz download fail" && EXIT 1)
 		else
 			opkg list | grep ^xz || opkg update && opkg install xz || (echo "xz download fail" && EXIT 1)
@@ -149,7 +147,7 @@ doupdate_core(){
 	echo -e "Updating core..."
 	mkdir -p "/tmp/AdGuardHomeupdate"
 	rm -rf /tmp/AdGuardHomeupdate/* >/dev/null 2>&1
-	if [ "$PKG_MANAGER" == "apk" ]; then
+	if [ "$PKG_MANAGER" = "apk" ]; then
 		Archt="$(apk info kernel 2>/dev/null | grep Architecture || uname -m)"
 	else
 		Archt="$(opkg info kernel | grep Architecture | awk -F "[ _]" '{print($2)}')"
@@ -162,7 +160,7 @@ doupdate_core(){
 	Arch="386"
 	;;
 	"x86")
-	Arch="amd64"
+	Arch="386"
 	;;
 	"x86_64")
 	Arch="amd64"
@@ -172,7 +170,6 @@ doupdate_core(){
 	;;
 	"mips64el")
 	Arch="mips64le"
-	Arch="mipsle"
 	echo -e "mips64el use $Arch may have bug" 
 	;;
 	"mips")
@@ -180,7 +177,6 @@ doupdate_core(){
 	;;
 	"mips64")
 	Arch="mips64"
-	Arch="mips"
 	echo -e "mips64 use $Arch may have bug" 
 	;;
 	"arm")
@@ -220,7 +216,7 @@ doupdate_core(){
 	done < "/tmp/run/AdHlinks.txt"
 	rm /tmp/run/AdHlinks.txt
 	[ -z "$success" ] && echo "no download success" && EXIT 1
-	if [ "${link##*.}" == "gz" ]; then
+	if [ "${link##*.}" = "gz" ]; then
 		tar -zxf "/tmp/AdGuardHomeupdate/${link##*/}" -C "/tmp/AdGuardHomeupdate/"
 		if [ ! -e "/tmp/AdGuardHomeupdate/AdGuardHome" ]; then
 			echo -e "Failed to download core." 
@@ -243,7 +239,7 @@ doupdate_core(){
 	/etc/init.d/AdGuardHome stop nobackup
 	rm "$binpath"
 	mv -f "$downloadbin" "$binpath"
-	if [ "$?" == "1" ]; then
+	if [ "$?" = "1" ]; then
 		echo "mv failed maybe not enough space please use upx or change bin to /tmp/AdGuardHome" 
 		EXIT 1
 	fi

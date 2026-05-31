@@ -3,8 +3,32 @@
 (function () {
 	function markPage() {
 		var map = document.querySelector(".cbi-map");
+		var nodes;
+		var node;
+
 		if (map) {
-			map.classList.add("adguardhome-luci-page");
+			map.classList.add("adguardhome-luci-page", "adguardhome-manual-map");
+
+			nodes = map.querySelectorAll(".cbi-section, .cbi-section-node, .cbi-value");
+			for (var i = 0; i < nodes.length; i++) {
+				node = nodes[i];
+				if (node.classList.contains("cbi-section")) {
+					node.classList.add("adguardhome-manual-section");
+				}
+				if (node.classList.contains("cbi-section-node")) {
+					node.classList.add("adguardhome-manual-section-node");
+				}
+				if (node.classList.contains("cbi-value")) {
+					node.classList.add("adguardhome-manual-row");
+				}
+			}
+		}
+
+		for (node = map ? map.parentNode : null; node && node !== document.body; node = node.parentNode) {
+			if (node.classList && node.tagName === "FORM") {
+				node.classList.add("adguardhome-manual-form");
+				break;
+			}
 		}
 	}
 	if (document.readyState === "loading") {
@@ -12,6 +36,8 @@
 	} else {
 		markPage();
 	}
+	window.setTimeout(markPage, 0);
+	window.setTimeout(markPage, 250);
 })();
 //]]></script>
 <style>
