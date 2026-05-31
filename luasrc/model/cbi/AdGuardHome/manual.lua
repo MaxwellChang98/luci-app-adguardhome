@@ -1,5 +1,5 @@
 local m, s, o
-local fs = require("luci.fs")
+local fs = require("nixio.fs")
 local uci = require("luci.model.uci").cursor()
 local sys = require("luci.sys")
 local http = require("luci.http")

@@ -8,7 +8,6 @@
 
 - **彻底弃用旧版兼容层，进入 FW4 纯净时代**：
   - 移除了对 OpenWrt 24.10 以下版本（含 FW3 和 iptables）的所有兼容代码。
-  - 移除了 Lua 代码中对 `nixio.fs` 的探测回退逻辑，全面使用 `luci.fs`，大幅提升执行效率与代码整洁度。
 - **修复 DNS 客户端 IP 丢失 (127.0.0.1)**：将 `nftables` 的 `redirect to` 重定向修改为原生的 `dnat ip to [LAN_IP]:[PORT]`，彻底解决 AdGuardHome 后台来源全显示为 `127.0.0.1` 的问题，确保能捕获真实设备 IP。
 - **修复内核更新架构识别**：修复了 32 位 x86 被错误映射，以及 MIPS64 系列变量二次赋值被覆盖的问题，确保各平台设备正常拉取对应内核包。
 - **修复脚本依赖与规范**：修复 `gfw2adg.sh` 强依赖 `wget-ssl` 导致下载失败的问题（引入 `check_wgetcurl` 函数自动探测 `curl/wget-ssl/wget`）；全面规范 `init.d` 启动等 Shell 脚本中的 `bash` 风格 `==` 语法，确保在 `ash` 下拥有最高的稳定兼容性。

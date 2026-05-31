@@ -1,6 +1,6 @@
 module("luci.controller.AdGuardHome", package.seeall)
 
-local fs = require("luci.fs")
+local fs = require("nixio.fs")
 local http = require("luci.http")
 local uci = require("luci.model.uci").cursor()
 local json = require("luci.jsonc")
