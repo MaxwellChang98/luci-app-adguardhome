@@ -22,97 +22,67 @@ set_iptable() {
 	local ipv6_server="$1"
 	local tcp_server="$2"
 
-	uci -q batch <<-EOF >/dev/null 2>&1
-		delete firewall.AdGuardHome
-		set firewall.AdGuardHome=include
-		set firewall.AdGuardHome.type=script
-		set firewall.AdGuardHome.path=/usr/share/AdGuardHome/firewall.start
-		set firewall.AdGuardHome.reload=1
-		commit firewall
-	EOF
+	mkdir -p /var/run/AdGuardHome
+	local nft_file="/var/run/AdGuardHome/firewall.nft"
 
-	# 清除旧规则
-	clear_iptable
-
-	logger -t AdGuardHome "FW4 DNAT: Setting up DNS redirect on port $AdGuardHome_PORT"
-
-	# 获取所有 LAN IPv4 地址
-	local IPS
-	IPS=$(ip -4 addr show 2>/dev/null | grep -E 'inet [0-9.]+' | grep -v "127\.0\.0\.1" | awk '{print $2}' | cut -d'/' -f1)
-	if [ -z "$IPS" ]; then
-		IPS=$(ifconfig 2>/dev/null | grep "inet addr" | grep -v ":127" | grep "Bcast" | awk '{print $2}' | awk -F: '{print $2}')
+	cat <<-EOF > "$nft_file"
+		table inet fw4 {
+			chain dstnat {
+				meta nfproto ipv4 udp dport 53 counter redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+EOF
+	if [ "$tcp_server" = "1" ]; then
+		cat <<-EOF >> "$nft_file"
+				meta nfproto ipv4 tcp dport 53 counter redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+EOF
 	fi
 
-	if [ -n "$IPS" ]; then
-		for IP in $IPS; do
-			logger -t AdGuardHome "FW4: Adding DNAT rule for IPv4 $IP:$AdGuardHome_PORT"
-			nft add rule inet fw4 dstnat ip daddr $IP udp dport 53 dnat ip to $IP:$AdGuardHome_PORT comment "AdGuardHome" 2>/dev/null
-			if [ "$tcp_server" = "1" ]; then
-				nft add rule inet fw4 dstnat ip daddr $IP tcp dport 53 dnat ip to $IP:$AdGuardHome_PORT comment "AdGuardHome" 2>/dev/null
-			fi
-		done
-	else
-		# 回退：使用默认 LAN 接口
-		local lan_iface=$(uci get network.lan.device 2>/dev/null || uci get network.lan.ifname 2>/dev/null || echo "br-lan")
-		local lan_ip=$(ip -4 addr show dev "$lan_iface" 2>/dev/null | grep inet | awk '{print $2}' | cut -d'/' -f1 | grep -v "^127\." | head -1)
-		if [ -n "$lan_ip" ]; then
-			logger -t AdGuardHome "FW4: Fallback to $lan_iface IP $lan_ip"
-			nft add rule inet fw4 dstnat iifname "$lan_iface" udp dport 53 dnat ip to $lan_ip:$AdGuardHome_PORT comment "AdGuardHome"
-			if [ "$tcp_server" = "1" ]; then
-				nft add rule inet fw4 dstnat iifname "$lan_iface" tcp dport 53 dnat ip to $lan_ip:$AdGuardHome_PORT comment "AdGuardHome"
-			fi
-		else
-			logger -t AdGuardHome "FW4: Cannot get LAN IP, using global REDIRECT"
-			nft add rule inet fw4 dstnat udp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
-			if [ "$tcp_server" = "1" ]; then
-				nft add rule inet fw4 dstnat tcp dport 53 redirect to :$AdGuardHome_PORT comment "AdGuardHome"
-			fi
-		fi
-	fi
-
-	# IPv6
 	if [ "$ipv6_server" = "1" ]; then
-		local IPS6
-		IPS6=$(ip -6 addr show 2>/dev/null | grep inet6 | grep -v "^fe80" | grep -v "::1" | awk '{print $2}' | cut -d'/' -f1)
-		if [ -z "$IPS6" ]; then
-			IPS6=$(ifconfig 2>/dev/null | grep "inet6 addr" | grep -v "fe80" | grep -v "::1" | awk '{print $3}')
-		fi
-		if [ -n "$IPS6" ]; then
-			for IP6 in $IPS6; do
-				logger -t AdGuardHome "FW4: Adding DNAT rule for IPv6 $IP6:$AdGuardHome_PORT"
-				nft add rule inet fw4 dstnat ip6 daddr $IP6 udp dport 53 dnat ip6 to "[$IP6]:$AdGuardHome_PORT" comment "AdGuardHome" 2>/dev/null
-				if [ "$tcp_server" = "1" ]; then
-					nft add rule inet fw4 dstnat ip6 daddr $IP6 tcp dport 53 dnat ip6 to "[$IP6]:$AdGuardHome_PORT" comment "AdGuardHome" 2>/dev/null
-				fi
-			done
-		else
-			local lan_iface=$(uci get network.lan.device 2>/dev/null || uci get network.lan.ifname 2>/dev/null || echo "br-lan")
-			local lan_ip6=$(ip -6 addr show dev "$lan_iface" 2>/dev/null | grep inet6 | grep -v "^fe80" | awk '{print $2}' | cut -d'/' -f1 | head -1)
-			if [ -n "$lan_ip6" ]; then
-				logger -t AdGuardHome "FW4: Adding IPv6 DNAT for $lan_ip6"
-				nft add rule inet fw4 dstnat iifname "$lan_iface" udp dport 53 dnat ip6 to "[$lan_ip6]:$AdGuardHome_PORT" comment "AdGuardHome"
-				if [ "$tcp_server" = "1" ]; then
-					nft add rule inet fw4 dstnat iifname "$lan_iface" tcp dport 53 dnat ip6 to "[$lan_ip6]:$AdGuardHome_PORT" comment "AdGuardHome"
-				fi
-			fi
+		cat <<-EOF >> "$nft_file"
+				meta nfproto ipv6 udp dport 53 counter redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+EOF
+		if [ "$tcp_server" = "1" ]; then
+			cat <<-EOF >> "$nft_file"
+				meta nfproto ipv6 tcp dport 53 counter redirect to :$AdGuardHome_PORT comment "AdGuardHome"
+EOF
 		fi
 	fi
+	cat <<-EOF >> "$nft_file"
+			}
+		}
+EOF
+
+	logger -t AdGuardHome "FW4 DNAT: Using native nftables includes for port $AdGuardHome_PORT"
+
+	local current_path=$(uci get firewall.AdGuardHome.path 2>/dev/null)
+	if [ "$current_path" != "$nft_file" ]; then
+		uci -q batch <<-EOF >/dev/null 2>&1
+			delete firewall.AdGuardHome
+			set firewall.AdGuardHome=include
+			set firewall.AdGuardHome.type=nftables
+			set firewall.AdGuardHome.path=$nft_file
+			set firewall.AdGuardHome.reload=1
+			commit firewall
+		EOF
+	fi
+	fw4 reload 2>/dev/null
 }
 
 # ============================================================
 # FW4 清除规则
 # ============================================================
 clear_iptable() {
-	uci -q batch <<-EOF >/dev/null 2>&1
-		delete firewall.AdGuardHome
-		commit firewall
-	EOF
-
-	# 清除 fw4 中带 "AdGuardHome" 注释的残留规则
-	if command -v nft >/dev/null 2>&1; then
-		for handle in $(nft -a list chain inet fw4 dstnat 2>/dev/null | grep "AdGuardHome" | awk -F '# handle ' '{print $2}'); do
-			nft delete rule inet fw4 dstnat handle ${handle} 2>/dev/null
-		done
+	local need_reload=0
+	if uci get firewall.AdGuardHome >/dev/null 2>&1; then
+		uci delete firewall.AdGuardHome
+		uci commit firewall
+		need_reload=1
+	fi
+	if [ -f /var/run/AdGuardHome/firewall.nft ]; then
+		rm -f /var/run/AdGuardHome/firewall.nft
+		need_reload=1
+	fi
+	if [ "$need_reload" = "1" ]; then
+		fw4 reload 2>/dev/null
 	fi
 }
 
@@ -278,16 +248,12 @@ _do_redirect()
 	if [ "$old_redirect" != "$redirect" ] || [ "$old_port" != "$AdGuardHome_PORT" ] || [ "$old_enabled" = "1" -a "$enabled" = "0" ]; then
 		if [ "$old_redirect" != "none" ]; then
 			if [ "$old_redirect" = "redirect" -a "$old_port" != "0" ]; then
-				clear_iptable "$old_port" "$ipv6_server"
+				clear_iptable
 			elif [ "$old_redirect" = "dnsmasq-upstream" ]; then
 				stop_forward_dnsmasq "$old_port"
 			elif [ "$old_redirect" = "exchange" ]; then
 				rm_port53
 			fi
-		fi
-	elif [ "$old_enabled" = "1" -a "$enabled" = "1" ]; then
-		if [ "$old_redirect" = "redirect" -a "$old_port" != "0" ]; then
-			clear_iptable "$old_port" "$ipv6_server"
 		fi
 	fi
 	uci delete AdGuardHome.@AdGuardHome[0].old_redirect 2>/dev/null

@@ -25,8 +25,8 @@ endef
 
 define Package/luci-app-adguardhome/description
 	LuCI support for AdGuard Home
-	Supports OpenWrt 24.10 and earlier (opkg), and OpenWrt 25.12+ (APK).
-	Compatible with FW3 and FW4 firewalls.
+	Supports OpenWrt 24.10 (opkg) and OpenWrt 25.12+ (APK).
+	Compatible with FW4 (nftables) firewall.
 endef
 
 define Build/Prepare

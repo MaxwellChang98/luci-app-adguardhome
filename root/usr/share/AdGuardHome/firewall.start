@@ -1,9 +1,0 @@
-#!/bin/sh
-
-AdGuardHome_enable=$(uci get AdGuardHome.AdGuardHome.enabled 2>/dev/null)
-redirect=$(uci get AdGuardHome.AdGuardHome.redirect 2>/dev/null)
-
-if [ "$AdGuardHome_enable" = "1" ] && [ "$redirect" = "redirect" ]; then
-	logger -t AdGuardHome "firewall.start: Setting up DNS redirect"
-	/etc/init.d/AdGuardHome do_redirect 1
-fi
