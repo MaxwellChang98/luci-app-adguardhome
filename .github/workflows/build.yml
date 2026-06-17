@@ -1,27 +1,104 @@
-name: Build & Release LuCI App
+name: Build OpenWrt LuCI App
 
 on:
-  push:
-    branches: [ master ]
-    tags: [ 'v*' ]
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  PACKAGE: luci-app-adguardhome
+  SDK_URL: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+  SNAPSDK_URL: https://downloads.openwrt.org/snapshots/targets/armsr/armv8/openwrt-sdk-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Build LuCI Package
-        id: build
-        uses: stevenjoezhang/build-luci-app@v0
-        with:
-          package: luci-app-adguardhome
-          sdk-url:  https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          snapsdk-url: https://downloads.openwrt.org/snapshots/targets/armsr/armv8/openwrt-sdk-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          version=$(grep 'PKG_VERSION:=' Makefile \
+                    | awk -F ':=' '{print $2}' \
+                    | xargs)
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "Current Version: ${version}"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl git tar zstd python3-pip rsync
+          pip3 install --upgrade pip
+          pip3 install po2lmo
+
+      - name: Download Legacy SDK
+        run: |
+          mkdir -p /tmp/SDK
+          curl -SLk --connect-timeout 30 --retry 2 \
+            "$SDK_URL" \
+            -o /tmp/SDK.tar.zst
+
+          tar --zstd -xf /tmp/SDK.tar.zst \
+            --strip-components=1 \
+            -C /tmp/SDK
+
+      - name: Download Snapshot SDK
+        run: |
+          mkdir -p /tmp/SNAPSDK
+          curl -SLk --connect-timeout 30 --retry 2 \
+            "$SNAPSDK_URL" \
+            -o /tmp/SNAPSDK.tar.zst
+
+          tar --zstd -xf /tmp/SNAPSDK.tar.zst \
+            --strip-components=1 \
+            -C /tmp/SNAPSDK
+
+      - name: Copy source
+        run: |
+          mkdir -p /tmp/SDK/package/$PACKAGE
+          mkdir -p /tmp/SNAPSDK/package/$PACKAGE
+
+          rsync -av --exclude='.git' . \
+            /tmp/SDK/package/$PACKAGE/
+
+          rsync -av --exclude='.git' . \
+            /tmp/SNAPSDK/package/$PACKAGE/
+
+      - name: Build IPK
+        run: |
+          cd /tmp/SDK
+          ./scripts/feeds update -a
+          ./scripts/feeds install $PACKAGE
+
+          echo "CONFIG_PACKAGE_${PACKAGE}=y" > .config
+          make defconfig
+          make package/$PACKAGE/compile -j$(nproc)
+
+      - name: Build APK
+        run: |
+          cd /tmp/SNAPSDK
+          ./scripts/feeds update -a
+          ./scripts/feeds install $PACKAGE
+
+          echo "CONFIG_PACKAGE_${PACKAGE}=y" > .config
+          make defconfig
+          make package/$PACKAGE/compile -j$(nproc)
+
+      - name: Collect artifacts
+        run: |
+          mkdir artifacts
+
+          find /tmp/SDK/bin -name "*.ipk" -exec cp {} artifacts/ \;
+          find /tmp/SNAPSDK/bin -name "*.apk" -exec cp {} artifacts/ \;
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./artifacts/*
-          name: Release v${{ steps.build.outputs.version }}
-          tag_name: ${{ github.ref_name }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
