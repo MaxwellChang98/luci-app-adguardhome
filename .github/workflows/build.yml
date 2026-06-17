@@ -5,7 +5,8 @@ on:
   push:
     tags:
       - "v*"
-
+permissions:
+  contents: write
 env:
   PACKAGE: luci-app-adguardhome
   SDK_URL: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
