@@ -24,9 +24,9 @@ jobs:
       uses: stevenjoezhang/build-luci-app@v0.0.1
       with:
     # LuCI package directory name (e.g. luci-app-tailscale)
-        package: 
+        package: luci-app-adguardhome
     # Legacy OpenWrt SDK .tar.bz2 URL
         sdk-url: 
     # Snapshot OpenWrt SDK .tar.zst URL
-        snapsdk-url: 
+        snapsdk-url: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           
