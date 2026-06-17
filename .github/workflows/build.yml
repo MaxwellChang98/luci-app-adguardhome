@@ -46,17 +46,6 @@ jobs:
             --strip-components=1 \
             -C /tmp/SDK
 
-      - name: Download Snapshot SDK
-        run: |
-          mkdir -p /tmp/SNAPSDK
-          curl -SLk --connect-timeout 30 --retry 2 \
-            "$SNAPSDK_URL" \
-            -o /tmp/SNAPSDK.tar.zst
-
-          tar --zstd -xf /tmp/SNAPSDK.tar.zst \
-            --strip-components=1 \
-            -C /tmp/SNAPSDK
-
       - name: Copy source
         run: |
           mkdir -p /tmp/SDK/package/$PACKAGE
@@ -78,23 +67,12 @@ jobs:
           make defconfig
           make package/$PACKAGE/compile -j$(nproc)
 
-      - name: Build APK
-        run: |
-          cd /tmp/SNAPSDK
-          ./scripts/feeds update -a
-          ./scripts/feeds install $PACKAGE
-
-          echo "CONFIG_PACKAGE_${PACKAGE}=y" > .config
-          make defconfig
-          make package/$PACKAGE/compile -j$(nproc)
 
       - name: Collect artifacts
         run: |
           mkdir artifacts
 
           find /tmp/SDK/bin -name "*.ipk" -exec cp {} artifacts/ \;
-          find /tmp/SNAPSDK/bin -name "*.apk" -exec cp {} artifacts/ \;
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
