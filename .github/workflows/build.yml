@@ -9,7 +9,7 @@ on:
 
 env:
   # 🔗 【重要】修改为你路由器固件对应的 SDK 下载地址
-  SDK_URL: https://downloads.openwrt.org/releases/24.10.7/targets/armsr/armv8/openwrt-sdk-24.10.7-armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+  SDK_URL: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
   # 📦 【重要】修改为你的 LuCI 文件夹名称（必须和 Makefile 里的包名一致）
   PKG_NAME: luci-app-adguardhome
 
