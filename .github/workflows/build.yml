@@ -1,32 +1,27 @@
-name: Build OpenWrt LuCI IPK
+name: Build & Release LuCI App
 
-# 触发条件：当代码推送到 main 分支，或者你手动点击运行
 on:
   push:
-    branches:
-      - main
+    branches: [ master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
-
-env:
-  # 🔗 【重要】修改为你路由器固件对应的 SDK 下载地址
-  SDK_URL: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-  # 📦 【重要】修改为你的 LuCI 文件夹名称（必须和 Makefile 里的包名一致）
-  PKG_NAME: luci-app-adguardhome
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Build OpenWrt LuCI App
-  # You may pin to the exact commit or the version.
-  # uses: stevenjoezhang/build-luci-app@ad78a59094d5dd3deada19b728f66b14d27053fe
-      uses: stevenjoezhang/build-luci-app@v0.0.1
-      with:
-    # LuCI package directory name (e.g. luci-app-tailscale)
-        package: luci-app-adguardhome
-    # Legacy OpenWrt SDK .tar.bz2 URL
-        sdk-url: 
-    # Snapshot OpenWrt SDK .tar.zst URL
-        snapsdk-url: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          
+      - name: Build LuCI Package
+        id: build
+        uses: stevenjoezhang/build-luci-app@v0
+        with:
+          package: luci-app-adguardhome
+          sdk-url:  https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          snapsdk-url: https://downloads.openwrt.org/releases/24.10.7/targets/x86/64/openwrt-sdk-24.10.7-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/*
+          name: Release v${{ steps.build.outputs.version }}
+          tag_name: ${{ github.ref_name }}
