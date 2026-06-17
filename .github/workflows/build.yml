@@ -18,50 +18,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. 拉取你仓库里的 LuCI 源码
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
+    - name: Build OpenWrt LuCI App
+  # You may pin to the exact commit or the version.
+  # uses: stevenjoezhang/build-luci-app@ad78a59094d5dd3deada19b728f66b14d27053fe
+      uses: stevenjoezhang/build-luci-app@v0.0.1
       with:
-        path: ${{ env.PKG_NAME }}
-
-    # 2. 补齐云服务器的编译依赖环境
-    - name: Install Build Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget
-
-    # 3. 下载并解压对应的 OpenWrt SDK
-    - name: Download and Unpack SDK
-      run: |
-        wget -qO sdk.tar.xz ${{ env.SDK_URL }}
-        mkdir sdk
-        tar -xvf sdk.tar.xz -C sdk --strip-components=1
-
-    # 4. 把你的 LuCI 插件源码移入 SDK 的 package 目录
-    - name: Move Package into SDK
-      run: |
-        mv ${{ env.PKG_NAME }} sdk/package/
-
-    # 5. 更新 SDK 核心依赖包
-    - name: Update and Install Feeds
-      run: |
-        cd sdk
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    # 6. 配置编译选项并开始打包
-    - name: Compile LuCI Package
-      run: |
-        cd sdk
-        # 强制将你的插件勾选为编译模块 (m)
-        echo "CONFIG_PACKAGE_${{ env.PKG_NAME }}=m" >> .config
-        make defconfig
-        # 仅编译你的插件，V=s 开启日志输出
-        make package/${{ env.PKG_NAME }}/compile V=s
-
-    # 7. 将打包出来的 .ipk 成品上传到 GitHub 供你下载
-    - name: Upload IPK Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.PKG_NAME }}-ipk-packages
-        path: sdk/bin/**/*.ipk
+    # LuCI package directory name (e.g. luci-app-tailscale)
+        package: 
+    # Legacy OpenWrt SDK .tar.bz2 URL
+        sdk-url: 
+    # Snapshot OpenWrt SDK .tar.zst URL
+        snapsdk-url: 
+          
